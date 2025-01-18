@@ -71,13 +71,17 @@ class GetWarpedNoiseFromVideo:
                 "latent_shape": (["BTCHW", "BCTHW", "BCHW"], {"tooltip": "Shape of the output latent tensor, for example CogVideoX uses BCTHW, while HunYuanVideo uses BTCHW"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
             },
+            "optional": {
+                "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"} ),
+                "sigmas": ("SIGMAS", {"tooltip": "Optional, to scale the noise"}),
+            },
         }
     RETURN_TYPES = ("LATENT", "IMAGE",)
     RETURN_NAMES = ("noise", "visualization",)
     FUNCTION = "warp"
     CATEGORY = "NoiseWarp"
 
-    def warp(self, images, noise_channels, noise_downtemp_interp, degradation, target_latent_count, latent_shape, seed):
+    def warp(self, images, noise_channels, noise_downtemp_interp, degradation, target_latent_count, latent_shape, seed, model=None, sigmas=None):
         device = mm.get_torch_device()
         torch.manual_seed(seed)
         downscale_factor = 1
@@ -157,6 +161,11 @@ class GetWarpedNoiseFromVideo:
             downtemp_noise_tensor = downtemp_noise_tensor.permute(0, 2, 1, 3, 4)
         elif latent_shape == "BCHW":
             downtemp_noise_tensor = downtemp_noise_tensor.squeeze(0)
+
+        if sigmas is not None:
+            sigma = sigmas[0] - sigmas[-1]
+            sigma /= model.model.latent_format.scale_factor
+            downtemp_noise_tensor *= sigma
 
         return {"samples":downtemp_noise_tensor}, vis_tensor_noises,
 
