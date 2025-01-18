@@ -21,6 +21,8 @@ def get_downtemp_noise(noise, noise_downtemp_interp, interp_to=13):
         return normalized_noises(downsamp_mean(noise, interp_to))
     elif noise_downtemp_interp == 'randn':
         return torch.randn_like(resize_list(noise, interp_to))
+    else:
+        return noise
 
 def downsamp_mean(x, l=13):
     return torch.stack([sum(u) / len(u) for u in split_into_n_sublists(x, l)])
@@ -63,10 +65,10 @@ class GetWarpedNoiseFromVideo:
             "required": {
                 "images": ("IMAGE", {"tooltip": "Input images to be warped"}),
                 "noise_channels": ("INT", {"default": 16, "min": 1, "max": 256, "step": 1}),
-                "noise_downtemp_interp": (["nearest", "blend", "blend_norm", "randn"], {"tooltip": "Interpolation method(s) for down-temporal noise"}),
+                "noise_downtemp_interp": (["nearest", "blend", "blend_norm", "randn", "disabled"], {"tooltip": "Interpolation method(s) for down-temporal noise"}),
                 "target_latent_count": ("INT", {"default": 13, "min": 1, "max": 2048, "step": 1, "tooltip": "Interpolate to this many latent frames"}),
                 "degradation": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp"}),
-                "latent_shape": (["BTCHW", "BCTHW"], {"tooltip": "Shape of the output latent tensor, for example CogVideoX uses BCTHW, while HunYuanVideo uses BTCHW"}),
+                "latent_shape": (["BTCHW", "BCTHW", "BCHW"], {"tooltip": "Shape of the output latent tensor, for example CogVideoX uses BCTHW, while HunYuanVideo uses BTCHW"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
             },
         }
@@ -130,8 +132,8 @@ class GetWarpedNoiseFromVideo:
             numpy_flows.append(numpy_flow)
             down_noise = downscale_noise(noise)
             numpy_noise = down_noise.cpu().numpy().astype(np.float16)
-            #print(numpy_noise.shape)
-            numpy_noises.append(numpy_noise)            
+            numpy_noises.append(numpy_noise)
+            pbar.update(1)
         
         numpy_noises = np.stack(numpy_noises).astype(np.float16)
         numpy_flows = np.stack(numpy_flows).astype(np.float16)
@@ -153,7 +155,8 @@ class GetWarpedNoiseFromVideo:
 
         if latent_shape == "BTCHW":
             downtemp_noise_tensor = downtemp_noise_tensor.permute(0, 2, 1, 3, 4)
-
+        elif latent_shape == "BCHW":
+            downtemp_noise_tensor = downtemp_noise_tensor.squeeze(0)
 
         return {"samples":downtemp_noise_tensor}, vis_tensor_noises,
 
