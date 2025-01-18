@@ -9,3 +9,5 @@ Including code from their rp -library: https://github.com/RyannDaGreat/rp
 And code from: https://github.com/VGenAI-Netflix-Eyeline-Research/Go-with-the-Flow
 
 ## Raft optical flow model is automatically downloaded upon execution.
+
+Currently usable with my CogVideoX -nodes https://github.com/kijai/ComfyUI-CogVideoXWrapper/
