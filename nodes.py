@@ -74,6 +74,7 @@ class GetWarpedNoiseFromVideo:
             "optional": {
                 "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"} ),
                 "sigmas": ("SIGMAS", {"tooltip": "Optional, to scale the noise"}),
+                "spatial_downscale_factor": ("INT", {"default": 8, "min": 1, "max": 1024, "step": 1, "tooltip": "latent space spatial scale factor"}),
             },
         }
     RETURN_TYPES = ("LATENT", "IMAGE",)
@@ -81,13 +82,13 @@ class GetWarpedNoiseFromVideo:
     FUNCTION = "warp"
     CATEGORY = "NoiseWarp"
 
-    def warp(self, images, noise_channels, noise_downtemp_interp, degradation, target_latent_count, latent_shape, seed, model=None, sigmas=None):
+    def warp(self, images, noise_channels, noise_downtemp_interp, degradation, target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None):
         device = mm.get_torch_device()
         torch.manual_seed(seed)
         downscale_factor = 1
         resize_flow = 1
         resize_frames = 1
-        downscale_factor=round(resize_frames * resize_flow) * 8
+        downscale_factor=round(resize_frames * resize_flow) * spatial_downscale_factor
     
         raft_model = RaftOpticalFlow(device, "large")
 
