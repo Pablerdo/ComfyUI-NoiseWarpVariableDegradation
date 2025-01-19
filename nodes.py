@@ -58,6 +58,61 @@ def split_into_n_sublists(l, n):
     indices = [int(i * L / n) for i in range(n + 1)]
     return [l[indices[i]:indices[i + 1]] for i in range(n)]
 
+def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
+    """
+    Visualize optical flow as an RGB image - and return the image.
+    
+    The hue represents the angle of the flow, while magnitude is represented by either brightness or saturation.
+    It has the same general idea as torchvision.utils.flow_to_image - when mode = 'saturation'
+    
+    Args:
+       dx (numpy.ndarray matrix): The x-component of the optical flow.
+       dy (numpy.ndarray matrix): The y-component of the optical flow.
+       mode (str, optional): The visualization mode. Can be:
+           - 'saturation': The saturation represents the magnitude. Default.
+           - 'brightness': The brightness represents the magnitude.
+       sensitivity (float, optional): If not specified, flow magnitudes are normalized at every frame
+           Otherwise, the flow magnitudes are multiplied by this amount before visualizing
+           (If you expect a max magnitude of 5 for example, you should set sensitivity=1/5)
+
+       TODO: Use floating-point HSV precision, and a custom mag factor
+       mag_factor (float, optional): the magnitude will be scaled by this number if specified,
+                                     otherwise the magnitude will be scaled with full_range
+    
+    Returns:
+       numpy.ndarray: The RGB image visualizing the optical flow.
+    
+    Raises:
+       AssertionError: If dx and dy are not float matrices with the same shape, or if the mode is invalid.
+
+    EXAMPLE:
+        (see get_optical_flow_via_pyflow's docstring for an example)
+    """
+    dx=dx.astype(float) # np.float16 doesnt work
+    dy=dy.astype(float) # np.float16 doesnt work
+    
+    import cv2
+    
+    hsv = np.zeros((*dx.shape, 3), dtype=np.uint8)
+    hsv[:] = 255
+    mag, ang = cv2.cartToPolar(dx, dy)
+
+    if sensitivity is None:
+        norm_mag = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
+    else:
+        norm_mag = mag
+        norm_mag = sensitivity * mag
+        norm_mag = np.tanh(norm_mag) #Soft clip it between 0 and 1
+        norm_mag = np.clip(norm_mag * 255, 0, 255)
+        norm_mag = norm_mag.astype(np.uint8)       
+
+
+    hsv[..., 0] = ang * 180 / np.pi / 2
+    hsv[..., {'brightness': 2, 'saturation': 1}[mode]] = norm_mag       
+    rgb = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    
+    return rgb
+
 class GetWarpedNoiseFromVideo:
     @classmethod
     def INPUT_TYPES(s):
@@ -77,8 +132,8 @@ class GetWarpedNoiseFromVideo:
                 "spatial_downscale_factor": ("INT", {"default": 8, "min": 1, "max": 1024, "step": 1, "tooltip": "latent space spatial scale factor"}),
             },
         }
-    RETURN_TYPES = ("LATENT", "IMAGE",)
-    RETURN_NAMES = ("noise", "visualization",)
+    RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE",)
+    RETURN_NAMES = ("noise", "visualization", "optical_flows")
     FUNCTION = "warp"
     CATEGORY = "NoiseWarp"
 
@@ -122,9 +177,11 @@ class GetWarpedNoiseFromVideo:
 
         numpy_noises = [numpy_noise]
         numpy_flows = []
+        rgb_flows = []
         pbar = ProgressBar(len(video_frames) - 1)
         for video_frame in tqdm(video_frames[1:], desc="Calculating noise warp", leave=False):
             dx, dy = raft_model(prev_video_frame, video_frame)
+            flow_rgb = optical_flow_to_image(dx.cpu().numpy(), dy.cpu().numpy(), mode='saturation', sensitivity=1)
             noise = warper(dx, dy).noise
             prev_video_frame = video_frame
 
@@ -138,15 +195,24 @@ class GetWarpedNoiseFromVideo:
             down_noise = downscale_noise(noise)
             numpy_noise = down_noise.cpu().numpy().astype(np.float16)
             numpy_noises.append(numpy_noise)
+            rgb_flows.append(flow_rgb)
             pbar.update(1)
         
         numpy_noises = np.stack(numpy_noises).astype(np.float16)
         numpy_flows = np.stack(numpy_flows).astype(np.float16)
+        rgb_flows = np.stack(rgb_flows).astype(np.uint8)
         
        
         vis_tensor_noises = torch.from_numpy(numpy_noises)# T, B, C, H, W
+        
         vis_tensor_noises = vis_tensor_noises[:, :, :min(noise_channels, 3), :, :]      
         vis_tensor_noises = vis_tensor_noises.squeeze(1).permute(0, 2, 3, 1).cpu().float()
+        vis_tensor_noises = (vis_tensor_noises - vis_tensor_noises.min()) / (vis_tensor_noises.max() - vis_tensor_noises.min())
+
+        print(vis_tensor_noises.min(), vis_tensor_noises.max())
+
+        vis_tensor_flows = torch.from_numpy(rgb_flows) / 255# T, B, C, H, W
+        #vis_tensor_flows = vis_tensor_flows.squeeze(1).permute(0, 2, 3, 1).cpu().float()
 
         noise_tensor = torch.from_numpy(numpy_noises).squeeze(1).cpu().float()
 
@@ -168,7 +234,7 @@ class GetWarpedNoiseFromVideo:
             sigma /= model.model.latent_format.scale_factor
             downtemp_noise_tensor *= sigma
 
-        return {"samples":downtemp_noise_tensor}, vis_tensor_noises,
+        return {"samples":downtemp_noise_tensor}, vis_tensor_noises, vis_tensor_flows,
 
 
 NODE_CLASS_MAPPINGS = {
