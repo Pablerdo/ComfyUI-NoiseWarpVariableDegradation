@@ -139,6 +139,7 @@ class GetWarpedNoiseFromVideo:
 
     def warp(self, images, noise_channels, noise_downtemp_interp, degradation, target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None):
         device = mm.get_torch_device()
+        offload_device = mm.unet_offload_device()
         torch.manual_seed(seed)
         downscale_factor = 1
         resize_flow = 1
@@ -175,6 +176,8 @@ class GetWarpedNoiseFromVideo:
         down_noise = downscale_noise(noise)
         numpy_noise = down_noise.cpu().numpy().astype(np.float16) # In HWC form. Using float16 to save RAM, but it might cause problems on come CPU
 
+        raft_model.model.to(device)
+
         numpy_noises = [numpy_noise]
         numpy_flows = []
         rgb_flows = []
@@ -198,21 +201,20 @@ class GetWarpedNoiseFromVideo:
             rgb_flows.append(flow_rgb)
             pbar.update(1)
         
+        raft_model.model.to(offload_device)
+        
         numpy_noises = np.stack(numpy_noises).astype(np.float16)
         numpy_flows = np.stack(numpy_flows).astype(np.float16)
         rgb_flows = np.stack(rgb_flows).astype(np.uint8)
         
        
-        vis_tensor_noises = torch.from_numpy(numpy_noises)# T, B, C, H, W
+        vis_tensor_noises = torch.from_numpy(numpy_noises) # T, B, C, H, W
         
         vis_tensor_noises = vis_tensor_noises[:, :, :min(noise_channels, 3), :, :]      
         vis_tensor_noises = vis_tensor_noises.squeeze(1).permute(0, 2, 3, 1).cpu().float()
         vis_tensor_noises = (vis_tensor_noises - vis_tensor_noises.min()) / (vis_tensor_noises.max() - vis_tensor_noises.min())
 
-        print(vis_tensor_noises.min(), vis_tensor_noises.max())
-
-        vis_tensor_flows = torch.from_numpy(rgb_flows) / 255# T, B, C, H, W
-        #vis_tensor_flows = vis_tensor_flows.squeeze(1).permute(0, 2, 3, 1).cpu().float()
+        vis_tensor_flows = torch.from_numpy(rgb_flows) / 255 # T, B, C, H, W
 
         noise_tensor = torch.from_numpy(numpy_noises).squeeze(1).cpu().float()
 
