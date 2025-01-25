@@ -242,11 +242,9 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
                 "images": ("IMAGE", {"tooltip": "Input images to be warped"}),
                 "degradation": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
-            },
-            "optional": {
                 "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"}),
                 "sigmas": ("SIGMAS", {"tooltip": "Optional, to scale the noise"}),
-            }
+            },
         }
 
     def warp(self, images, degradation, seed, model=None, sigmas=None):
