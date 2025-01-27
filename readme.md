@@ -1,4 +1,4 @@
-# ComfyUI node to create warped noise from vide
+# ComfyUI node to create warped noise from video
 
 # WORK IN PROGRESS
 
@@ -11,3 +11,5 @@ And code from: https://github.com/Eyeline-Research/Go-with-the-Flow
 ## Raft optical flow model is automatically downloaded upon execution.
 
 Currently usable with my CogVideoX -nodes https://github.com/kijai/ComfyUI-CogVideoXWrapper/
+
+And with experimental AnimateDiff motion lora by spacepxl: https://huggingface.co/spacepxl/animatediffv3_warpednoise_motionlora
