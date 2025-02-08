@@ -119,7 +119,7 @@ class WarpedNoiseBase:
     FUNCTION = "warp"
     CATEGORY = "NoiseWarp"
 
-    def _process_video_frames(self, images, noise_channels, device, downscale_factor, resize_flow):
+    def _process_video_frames(self, images, noise_channels, device, downscale_factor, resize_flow, return_flows=True):
         B, H, W, C = images.shape
         video_frames = images.permute(0, 3, 1, 2)
         
@@ -135,38 +135,34 @@ class WarpedNoiseBase:
         raft_model = RaftOpticalFlow(device, "large")
         raft_model.model.to(device)
 
-        return self._compute_warped_noise(video_frames, warper, raft_model, downscale_factor)
+        return self._compute_warped_noise(video_frames, warper, raft_model, downscale_factor, return_flows=return_flows)
 
-    def _compute_warped_noise(self, video_frames, warper, raft_model, downscale_factor):
+    def _compute_warped_noise(self, video_frames, warper, raft_model, downscale_factor, return_flows=False):
         prev_video_frame = video_frames[0]
         noise = warper.noise
         down_noise = self._downscale_noise(noise, downscale_factor)
         numpy_noise = down_noise.cpu().numpy().astype(np.float16)
 
         numpy_noises = [numpy_noise]
-        numpy_flows = []
         rgb_flows = []
 
         pbar = ProgressBar(len(video_frames) - 1)
 
-        for video_frame in tqdm(video_frames[1:], desc="Calculating noise warp", leave=False):
+        for video_frame in tqdm(video_frames[1:], desc="Calculating noise warp"):
             dx, dy = raft_model(prev_video_frame, video_frame)
-            flow_rgb = optical_flow_to_image(dx.cpu().numpy(), dy.cpu().numpy(), mode='saturation', sensitivity=1)
+            if return_flows:
+                flow_rgb = optical_flow_to_image(dx.cpu().numpy(), dy.cpu().numpy(), mode='saturation', sensitivity=1)
+                rgb_flows.append(flow_rgb)
             noise = warper(dx, dy).noise
             prev_video_frame = video_frame
-
-            numpy_flow = np.stack([dx.cpu().numpy().astype(np.float16), dy.cpu().numpy().astype(np.float16)])
             down_noise = self._downscale_noise(noise, downscale_factor)
-            
-            numpy_flows.append(numpy_flow)
             numpy_noises.append(down_noise.cpu().numpy().astype(np.float16))
-            rgb_flows.append(flow_rgb)
             pbar.update(1)
 
-        return np.stack(numpy_noises), np.stack(numpy_flows), np.stack(rgb_flows)
+        return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
 
     def warp(self, images, noise_channels, noise_downtemp_interp, degradation, 
-             target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None):
+             target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None, return_flows=True):
         device = mm.get_torch_device()
         offload_device = mm.unet_offload_device()
         torch.manual_seed(seed)
@@ -175,8 +171,8 @@ class WarpedNoiseBase:
         resize_frames = 1
         downscale_factor = round(resize_frames * resize_flow) * spatial_downscale_factor
 
-        numpy_noises, numpy_flows, rgb_flows = self._process_video_frames(
-            images, noise_channels, device, downscale_factor, resize_flow
+        numpy_noises, rgb_flows = self._process_video_frames(
+            images, noise_channels, device, downscale_factor, resize_flow, return_flows=return_flows
         )
 
         # Process visualization tensors
@@ -184,7 +180,10 @@ class WarpedNoiseBase:
         vis_tensor_noises = vis_tensor_noises[:, :, :min(noise_channels, 3), :, :]      
         vis_tensor_noises = vis_tensor_noises.squeeze(1).permute(0, 2, 3, 1).cpu().float()
         vis_tensor_noises = (vis_tensor_noises - vis_tensor_noises.min()) / (vis_tensor_noises.max() - vis_tensor_noises.min())
-        vis_tensor_flows = torch.from_numpy(rgb_flows) / 255
+        if return_flows:
+            vis_tensor_flows = torch.from_numpy(rgb_flows) / 255
+        else:
+            vis_tensor_flows = None
 
         # Process noise tensor
         noise_tensor = torch.from_numpy(numpy_noises).squeeze(1).cpu().float()
@@ -246,6 +245,8 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
                 "sigmas": ("SIGMAS", {"tooltip": "Optional, to scale the noise"}),
             },
         }
+    RETURN_TYPES = ("LATENT", "IMAGE",)
+    RETURN_NAMES = ("noise", "visualization",)
 
     def warp(self, images, degradation, seed, model=None, sigmas=None):
         return super().warp(
@@ -258,7 +259,8 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
             spatial_downscale_factor=8,
             seed=seed,
             model=model,
-            sigmas=sigmas
+            sigmas=sigmas,
+            return_flows=False
         )
 
 class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
@@ -301,6 +303,8 @@ class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
             },
         }
+    RETURN_TYPES = ("LATENT", "IMAGE",)
+    RETURN_NAMES = ("noise", "visualization",)
 
     def warp(self, images, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
         latent_frames = (num_frames - 1) // 4 + 1
@@ -314,7 +318,8 @@ class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
             spatial_downscale_factor=8,
             seed=seed,
             model=model,
-            sigmas=sigmas
+            sigmas=sigmas,
+            return_flows=False
         )
 
 

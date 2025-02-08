@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-videonoisewarp"
 description = "Nodes to generate noise from video for https://github.com/Eyeline-Research/Go-with-the-Flow"
-version = "1.0.2"
+version = "1.0.3"
 license = {file = "LICENSE"}
 dependencies = ["einops"]
 
