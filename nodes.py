@@ -194,7 +194,7 @@ class WarpedNoiseBase:
         vis_tensor_noises = (vis_tensor_noises - vis_tensor_noises.min()) / (vis_tensor_noises.max() - vis_tensor_noises.min())
         target_len = images.shape[0]
         repeat_count = (target_len + vis_tensor_noises.shape[0] - 1) // vis_tensor_noises.shape[0]
-        vis_tensor_noises = vis_tensor_noises.repeat(repeat_count, 1, 1, 1)[:target_len]
+        vis_tensor_noises = vis_tensor_noises.repeat_interleave(repeat_count, dim=0)[:target_len]
         if return_flows:
             vis_tensor_flows = torch.from_numpy(rgb_flows) / 255
         else:
