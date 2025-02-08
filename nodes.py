@@ -175,16 +175,6 @@ class WarpedNoiseBase:
             images, noise_channels, device, downscale_factor, resize_flow, return_flows=return_flows
         )
 
-        # Process visualization tensors
-        vis_tensor_noises = torch.from_numpy(numpy_noises)
-        vis_tensor_noises = vis_tensor_noises[:, :, :min(noise_channels, 3), :, :]      
-        vis_tensor_noises = vis_tensor_noises.squeeze(1).permute(0, 2, 3, 1).cpu().float()
-        vis_tensor_noises = (vis_tensor_noises - vis_tensor_noises.min()) / (vis_tensor_noises.max() - vis_tensor_noises.min())
-        if return_flows:
-            vis_tensor_flows = torch.from_numpy(rgb_flows) / 255
-        else:
-            vis_tensor_flows = None
-
         # Process noise tensor
         noise_tensor = torch.from_numpy(numpy_noises).squeeze(1).cpu().float()
         downtemp_noise_tensor = get_downtemp_noise(
@@ -195,6 +185,17 @@ class WarpedNoiseBase:
         
         downtemp_noise_tensor = downtemp_noise_tensor[None]
         downtemp_noise_tensor = mix_new_noise(downtemp_noise_tensor, degradation)
+        print(downtemp_noise_tensor.shape)
+
+        # Process visualization tensors
+        vis_tensor_noises = downtemp_noise_tensor
+        vis_tensor_noises = vis_tensor_noises[:, :, :min(noise_channels, 3), :, :]      
+        vis_tensor_noises = vis_tensor_noises.squeeze(0).permute(0, 2, 3, 1).cpu().float()
+        vis_tensor_noises = (vis_tensor_noises - vis_tensor_noises.min()) / (vis_tensor_noises.max() - vis_tensor_noises.min())
+        if return_flows:
+            vis_tensor_flows = torch.from_numpy(rgb_flows) / 255
+        else:
+            vis_tensor_flows = None
 
         if latent_shape == "BTCHW":
             downtemp_noise_tensor = downtemp_noise_tensor.permute(0, 2, 1, 3, 4)
