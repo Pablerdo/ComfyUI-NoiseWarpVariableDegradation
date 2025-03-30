@@ -162,9 +162,9 @@ class WarpedNoiseBase:
         return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
 
     def warp(self, images, noise_channels, noise_downtemp_interp, degradation, 
-             target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None, return_flows=True):
+             target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None, return_flows=True, output_device="CPU"):
         device = mm.get_torch_device()
-        offload_device = mm.unet_offload_device()
+        
         torch.manual_seed(seed)
         
         resize_flow = 1
@@ -206,9 +206,12 @@ class WarpedNoiseBase:
             downtemp_noise_tensor = downtemp_noise_tensor.squeeze(0)
 
         if sigmas is not None:
+            sigmas = sigmas.cpu()
             sigma = sigmas[0] - sigmas[-1]
             sigma /= model.model.latent_format.scale_factor
             downtemp_noise_tensor *= sigma
+
+        downtemp_noise_tensor = downtemp_noise_tensor.to(device) if output_device == "GPU" else downtemp_noise_tensor.cpu()
 
         return {"samples":downtemp_noise_tensor}, vis_tensor_noises, vis_tensor_flows
 
@@ -234,6 +237,7 @@ class GetWarpedNoiseFromVideo(WarpedNoiseBase):
                 "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"} ),
                 "sigmas": ("SIGMAS", {"tooltip": "Optional, to scale the noise"}),
                 "spatial_downscale_factor": ("INT", {"default": 8, "min": 1, "max": 1024, "step": 1, "tooltip": "latent space spatial scale factor"}),
+                "output_device": (["GPU", "CPU"], {"default": "CPU", "tooltip": "Device to return the latents on"}),
             },
         }
 
@@ -247,12 +251,13 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
                 "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"}),
                 "sigmas": ("SIGMAS", {"tooltip": "Optional, to scale the noise"}),
+                "output_device": (["GPU", "CPU"], {"default": "CPU", "tooltip": "Device to return the latents on"}),
             },
         }
     RETURN_TYPES = ("LATENT", "IMAGE",)
     RETURN_NAMES = ("noise", "visualization",)
 
-    def warp(self, images, degradation, seed, model=None, sigmas=None):
+    def warp(self, images, degradation, seed, model=None, sigmas=None, output_device="CPU"):
         return super().warp(
             images=images,
             noise_channels=4,
@@ -264,7 +269,8 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
             seed=seed,
             model=model,
             sigmas=sigmas,
-            return_flows=False
+            return_flows=False,
+            output_device=output_device
         )
 
 class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
@@ -277,10 +283,11 @@ class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
                 "num_frames": ("INT", {"default": 49, "min": 1, "max": 2048, "step": 1, "tooltip": "Interpolate to this many frames"}),
                 "degradation": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
+                "output_device": (["GPU", "CPU"], {"default": "CPU", "tooltip": "Device to return the latents on"}),
             },
         }
 
-    def warp(self, images, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
+    def warp(self, images, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, output_device="CPU"):
         latent_frames = (num_frames - 1) // 4 + 1
         return super().warp(
             images=images,
@@ -292,7 +299,8 @@ class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
             spatial_downscale_factor=8,
             seed=seed,
             model=model,
-            sigmas=sigmas
+            sigmas=sigmas,
+            output_device=output_device
         )
     
 class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
