@@ -12,3 +12,4 @@ tools/
 test/
 compile_check.py
 *.mp4
+test.py

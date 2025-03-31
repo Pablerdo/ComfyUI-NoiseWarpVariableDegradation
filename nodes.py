@@ -117,7 +117,7 @@ class WarpedNoiseBase:
     RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE",)
     RETURN_NAMES = ("noise", "visualization", "optical_flows")
     FUNCTION = "warp"
-    CATEGORY = "NoiseWarp"
+    CATEGORY = "NoiseWarpVariableDegradation"
 
     def _process_video_frames(self, images, noise_channels, device, downscale_factor, resize_flow, return_flows=True):
         B, H, W, C = images.shape
