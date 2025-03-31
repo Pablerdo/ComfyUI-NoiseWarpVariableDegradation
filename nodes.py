@@ -9,7 +9,7 @@ from comfy.utils import ProgressBar
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-from .noisewarp.noise_warp import NoiseWarper, mix_new_noise
+from .noisewarp.noise_warp import NoiseWarper, mix_new_noise, mix_new_noise_variable_degradation
 from .noisewarp.raft import RaftOpticalFlow
 
 def get_downtemp_noise(noise, noise_downtemp_interp, interp_to=13):   
@@ -184,7 +184,7 @@ class WarpedNoiseBase:
         )
         
         downtemp_noise_tensor = downtemp_noise_tensor[None]
-        downtemp_noise_tensor = mix_new_noise(downtemp_noise_tensor, degradation, boundary_degradation, second_boundary_degradation)
+        downtemp_noise_tensor = mix_new_noise_variable_degradation(downtemp_noise_tensor, degradation, boundary_degradation, second_boundary_degradation)
         print(downtemp_noise_tensor.shape)
 
         # Process visualization tensors
