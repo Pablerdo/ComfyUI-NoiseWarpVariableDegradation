@@ -9,3 +9,6 @@ logs/
 .idea
 *.pt
 tools/
+test/
+compile_check.py
+*.mp4

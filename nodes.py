@@ -161,7 +161,7 @@ class WarpedNoiseBase:
 
         return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
 
-    def warp(self, images, noise_channels, noise_downtemp_interp, degradation, 
+    def warp(self, images, noise_channels, noise_downtemp_interp, degradation, boundary_degradation, second_boundary_degradation,
              target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None, return_flows=True, output_device="CPU"):
         device = mm.get_torch_device()
         
@@ -184,7 +184,7 @@ class WarpedNoiseBase:
         )
         
         downtemp_noise_tensor = downtemp_noise_tensor[None]
-        downtemp_noise_tensor = mix_new_noise(downtemp_noise_tensor, degradation)
+        downtemp_noise_tensor = mix_new_noise(downtemp_noise_tensor, degradation, boundary_degradation, second_boundary_degradation)
         print(downtemp_noise_tensor.shape)
 
         # Process visualization tensors
@@ -311,20 +311,24 @@ class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
                 "images": ("IMAGE", {"tooltip": "Input images to be warped"}),
                 "noise_downtemp_interp": (["nearest", "blend", "blend_norm", "randn", "disabled"], {"tooltip": "Interpolation method(s) for down-temporal noise"}),
                 "num_frames": ("INT", {"default": 49, "min": 1, "max": 2048, "step": 1, "tooltip": "Interpolate to this many frames"}),
-                "degradation": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp"}),
+                "boundary_degradation": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp at the boundaries"}),
+                "second_boundary_degradation": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp at the second boundary"}),
+                "degradation": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp at the inner region of the mask"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
             },
         }
     RETURN_TYPES = ("LATENT", "IMAGE",)
     RETURN_NAMES = ("noise", "visualization",)
 
-    def warp(self, images, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
+    def warp(self, images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
         latent_frames = (num_frames - 1) // 4 + 1
         return super().warp(
             images=images,
             noise_channels=16,
             noise_downtemp_interp=noise_downtemp_interp,
             degradation=degradation,
+            boundary_degradation=boundary_degradation,
+            second_boundary_degradation=second_boundary_degradation,
             target_latent_count=latent_frames,
             latent_shape="BTCHW",
             spatial_downscale_factor=8,
