@@ -677,12 +677,12 @@ def compute_alpha_map_2levels(mask: torch.Tensor,
     # outside mask => alpha=0 (already set to 0 by zeros_like).
     return alpha_map
 
-def mix_new_noise_variable_degradation(noise, boundary_alpha, second_boundary_alpha, inner_alpha, boundary_px1=10, boundary_px2=20):
+def mix_new_noise_variable_degradation(noise, masks, boundary_alpha, second_boundary_alpha, inner_alpha, boundary_px1=10, boundary_px2=20):
     """As alpha --> 1, noise is destroyed"""
 
     if isinstance(noise, torch.Tensor): 
         print(f"mix_new_noise: noise is a torch.Tensor")
-        boundary_mask, second_boundary_mask = double_mask_border_region(noise, boundary_px1, boundary_px2)
+        boundary_mask, second_boundary_mask = double_mask_border_region(masks, boundary_px1, boundary_px2)
 
         alpha_map = compute_alpha_map_2levels(noise, boundary_mask, second_boundary_mask, boundary_alpha, second_boundary_alpha, inner_alpha)
 
