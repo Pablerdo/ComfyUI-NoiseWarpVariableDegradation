@@ -173,7 +173,7 @@ class WarpedNoiseBase:
         downscale_factor = round(resize_frames * resize_flow) * spatial_downscale_factor
 
         numpy_noises, rgb_flows = self._process_video_frames(
-            images, masks, noise_channels, device, downscale_factor, resize_flow, return_flows=return_flows
+            images, noise_channels, device, downscale_factor, resize_flow, return_flows=return_flows
         )
 
         # Process noise tensor
@@ -185,7 +185,7 @@ class WarpedNoiseBase:
         )
         
         downtemp_noise_tensor = downtemp_noise_tensor[None]
-        downtemp_noise_tensor = mix_new_noise_variable_degradation(downtemp_noise_tensor, masks, degradation, boundary_degradation, second_boundary_degradation)
+        downtemp_noise_tensor = mix_new_noise_variable_degradation(downtemp_noise_tensor, masks, boundary_degradation, second_boundary_degradation, degradation)
         print(downtemp_noise_tensor.shape)
 
         # Process visualization tensors
