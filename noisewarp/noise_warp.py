@@ -604,7 +604,11 @@ def blend_noise(noise_background, noise_foreground, alpha):
     return (noise_foreground * alpha + noise_background * (1-alpha))/(alpha ** 2 + (1-alpha) ** 2)**.5
 
 def blend_noise_alpha_map(noise_background: torch.Tensor, noise_foreground: torch.Tensor, alpha_map: torch.Tensor):
-    """ Variance-preserving blend """
+    """ Variance-preserving blend with broadcasting for sequence processing """
+    # Ensure alpha_map has correct broadcasting dimensions to match noise tensors
+    while len(alpha_map.shape) < len(noise_background.shape):
+        alpha_map = alpha_map.unsqueeze(1)
+        
     return (noise_foreground * alpha_map + noise_background * (1-alpha_map))/(alpha_map ** 2 + (1-alpha_map) ** 2)**.5
 
 
@@ -615,7 +619,7 @@ def double_mask_border_region(mask: torch.Tensor,
     Returns (near_border_1, near_border_2_only) for the given mask:
       - near_border_1:  all pixels in the mask that are ≤ border_px1 from the boundary
       - near_border_2_only: all pixels in the mask that are > border_px1 but ≤ border_px2 from boundary
-    Both are [H,W] in {0,1}.
+    Both are [...,H,W] in {0,1}, preserving input batch dimensions.
 
     Implementation:
       1) Identify outside = 1 - mask
@@ -623,27 +627,47 @@ def double_mask_border_region(mask: torch.Tensor,
       3) Dilation #2: up to border_px2 => near_border_2
       4) near_border_2_only = near_border_2 - near_border_1
     """
-    # Prepare for morphological ops
-    # shape => [1,1,H,W]
-    mask_4d = mask.unsqueeze(0).unsqueeze(0).float()  
-    outside = 1.0 - mask_4d  # shape [1,1,H,W]
-
+    # Get original shape and handle both single masks and batches of masks
+    orig_shape = mask.shape
+    
+    # Reshape to add channel dim if not present, but preserve batch dimensions
+    if len(orig_shape) == 2:  # Single HW mask
+        mask_4d = mask.unsqueeze(0).unsqueeze(0).float()  # shape [1,1,H,W]
+    elif len(orig_shape) == 3:  # BHW format (sequence of masks)
+        mask_4d = mask.unsqueeze(1).float()  # shape [B,1,H,W]
+    elif len(orig_shape) == 4:  # Already BCHW format
+        mask_4d = mask.float()
+    else:
+        raise ValueError(f"Unexpected mask shape: {orig_shape}")
+    
+    outside = 1.0 - mask_4d  # Keep batch dimensions intact
+    
     # Step 1: identify region within border_px1 of boundary
     working_1 = outside.clone()
     for _ in range(border_px1):
         working_1 = F.max_pool2d(working_1, kernel_size=3, stride=1, padding=1)
     # Where working_1 is 1, that means it's reachable from outside with ≤ border_px1 expansions
-    near_border_1 = (working_1 * mask_4d).squeeze(0).squeeze(0)  # shape [H,W]
-
+    near_border_1 = (working_1 * mask_4d)  # Preserve batch dimensions
+    
     # Step 2: region within border_px2
     working_2 = outside.clone()
     for _ in range(border_px2):
         working_2 = F.max_pool2d(working_2, kernel_size=3, stride=1, padding=1)
-    near_border_2 = (working_2 * mask_4d).squeeze(0).squeeze(0)  # shape [H,W]
-
+    near_border_2 = (working_2 * mask_4d)  # Preserve batch dimensions
+    
     # Step 3: subtract near_border_1 from near_border_2 → region in [border_px1+1..border_px2]
     near_border_2_only = (near_border_2 - near_border_1).clamp_min_(0.0)
-
+    
+    # Remove the channel dimension but keep batch dimensions
+    if len(orig_shape) == 2:  # Was a single HW mask
+        near_border_1 = near_border_1.squeeze(0).squeeze(0)  # back to HW
+        near_border_2_only = near_border_2_only.squeeze(0).squeeze(0)  # back to HW
+    elif len(orig_shape) == 3:  # Was BHW format
+        near_border_1 = near_border_1.squeeze(1)  # back to BHW
+        near_border_2_only = near_border_2_only.squeeze(1)  # back to BHW
+    elif len(orig_shape) == 4:  # Was BCHW format
+        pass  # Already in correct format
+    
     return near_border_1, near_border_2_only
 
 def compute_alpha_map_2levels(mask: torch.Tensor,
@@ -658,22 +682,28 @@ def compute_alpha_map_2levels(mask: torch.Tensor,
       - near_border_2_only => second_boundary_alpha
       - inside but not in either => alpha_inner
       - outside mask => 0
-    mask, near_border_1, near_border_2_only => [H,W]
-    returns alpha_map => [H,W] in [0,1].
+    mask, near_border_1, near_border_2_only => [...,H,W]
+    returns alpha_map => [...,H,W] in [0,1], preserving input batch dimensions.
     """
     alpha_map = torch.zeros_like(mask, dtype=torch.float32)
-
+    
     # region 1
-    alpha_map[near_border_1 > 0.5] = boundary_alpha
-
+    alpha_map = torch.where(near_border_1 > 0.5, 
+                           torch.tensor(boundary_alpha, device=mask.device, dtype=torch.float32), 
+                           alpha_map)
+    
     # region 2 (the annulus between border_px1..border_px2)
-    alpha_map[near_border_2_only > 0.5] = second_boundary_alpha
-
+    alpha_map = torch.where(near_border_2_only > 0.5,
+                           torch.tensor(second_boundary_alpha, device=mask.device, dtype=torch.float32),
+                           alpha_map)
+    
     # inside but not in near_border_1 or near_border_2
     # find them by: in the mask, but not in near_border_1 or near_border_2_only
     inside_not_border = (mask > 0.5) & (near_border_1 < 0.5) & (near_border_2_only < 0.5)
-    alpha_map[inside_not_border] = alpha_inner
-
+    alpha_map = torch.where(inside_not_border,
+                           torch.tensor(alpha_inner, device=mask.device, dtype=torch.float32),
+                           alpha_map)
+    
     # outside mask => alpha=0 (already set to 0 by zeros_like).
     return alpha_map
 
@@ -681,11 +711,22 @@ def mix_new_noise_variable_degradation(noise, masks, boundary_alpha, second_boun
     """As alpha --> 1, noise is destroyed"""
 
     if isinstance(noise, torch.Tensor): 
-        print(f"mix_new_noise: noise is a torch.Tensor")
+        print(f"mix_new_noise: noise is a torch.Tensor with shape {noise.shape}")
+        print(f"masks shape: {masks.shape}")
+        
         boundary_mask, second_boundary_mask = double_mask_border_region(masks, boundary_px1, boundary_px2)
-
-        alpha_map = compute_alpha_map_2levels(noise, boundary_mask, second_boundary_mask, boundary_alpha, second_boundary_alpha, inner_alpha)
-
+        
+        alpha_map = compute_alpha_map_2levels(masks, boundary_mask, second_boundary_mask, 
+                                             boundary_alpha, second_boundary_alpha, inner_alpha)
+        
+        # Reshape alpha_map to match noise dimensions if needed
+        if len(alpha_map.shape) < len(noise.shape):
+            # Expand alpha_map to match noise dimensions
+            # For example, if noise is [1,16,13,64,64] and alpha_map is [13,64,64]
+            # we need to make alpha_map [1,1,13,64,64]
+            for _ in range(len(noise.shape) - len(alpha_map.shape)):
+                alpha_map = alpha_map.unsqueeze(0)
+        
         return blend_noise_alpha_map(noise, torch.randn_like(noise), alpha_map)
     elif isinstance(noise, np.ndarray): 
         print(f"mix_new_noise: noise is a np.ndarray")
