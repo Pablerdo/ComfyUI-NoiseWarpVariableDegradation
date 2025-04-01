@@ -606,6 +606,9 @@ def blend_noise(noise_background, noise_foreground, alpha):
 def blend_noise_alpha_map(noise_background: torch.Tensor, noise_foreground: torch.Tensor, alpha_map: torch.Tensor):
     """ Variance-preserving blend with broadcasting for sequence processing """
     # Ensure alpha_map has correct broadcasting dimensions to match noise tensors
+    print(f"blend_noise_alpha_map: alpha_map shape: {alpha_map.shape}")
+    print(f"blend_noise_alpha_map: noise_background shape: {noise_background.shape}")
+    print(f"blend_noise_alpha_map: noise_foreground shape: {noise_foreground.shape}")
     while len(alpha_map.shape) < len(noise_background.shape):
         alpha_map = alpha_map.unsqueeze(1)
         

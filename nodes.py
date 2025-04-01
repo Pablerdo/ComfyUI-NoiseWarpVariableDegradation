@@ -9,7 +9,7 @@ from comfy.utils import ProgressBar
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-from .noisewarp.noise_warp import NoiseWarper, mix_new_noise, mix_new_noise_variable_degradation
+from .noisewarp.noise_warp import NoiseWarper, mix_new_noise_variable_degradation
 from .noisewarp.raft import RaftOpticalFlow
 
 def get_downtemp_noise(noise, noise_downtemp_interp, interp_to=13):   
@@ -227,7 +227,7 @@ class GetWarpedNoiseFromVideo(WarpedNoiseBase):
         return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "Input images to be warped"}),
-                "masks": ("MASK", {"tooltip": "Input masks to defiene the degradation boundaries"}),
+                "binary_images": ("IMAGE", {"tooltip": "Input binary images to define the degradation boundaries"}),
                 "noise_channels": ("INT", {"default": 16, "min": 1, "max": 256, "step": 1}),
                 "noise_downtemp_interp": (["nearest", "blend", "blend_norm", "randn", "disabled"], {"tooltip": "Interpolation method(s) for down-temporal noise"}),
                 "target_latent_count": ("INT", {"default": 13, "min": 1, "max": 2048, "step": 1, "tooltip": "Interpolate to this many latent frames"}),
@@ -251,7 +251,7 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
         return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "Input images to be warped"}),
-                "masks": ("MASK", {"tooltip": "Input masks to defiene the degradation boundaries"}),
+                "binary_images": ("IMAGE", {"tooltip": "Input binary images to define the degradation boundaries"}),
                 "degradation": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
                 "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"}),
@@ -262,10 +262,10 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
     RETURN_TYPES = ("LATENT", "IMAGE",)
     RETURN_NAMES = ("noise", "visualization",)
 
-    def warp(self, images, masks, degradation, seed, model=None, sigmas=None, output_device="CPU"):
+    def warp(self, images, binary_images, degradation, seed, model=None, sigmas=None, output_device="CPU"):
         return super().warp(
             images=images,
-            masks=masks,
+            masks=binary_images,
             noise_channels=4,
             noise_downtemp_interp="disabled",
             degradation=degradation,
@@ -285,7 +285,7 @@ class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
        return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "Input images to be warped"}),
-                "masks": ("MASK", {"tooltip": "Input masks to defiene the degradation boundaries"}),
+                "binary_images": ("IMAGE", {"tooltip": "Input binary images to define the degradation boundaries"}),
                 "noise_downtemp_interp": (["nearest", "blend", "blend_norm", "randn", "disabled"], {"tooltip": "Interpolation method(s) for down-temporal noise"}),
                 "num_frames": ("INT", {"default": 49, "min": 1, "max": 2048, "step": 1, "tooltip": "Interpolate to this many frames"}),
                 "degradation": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp"}),
@@ -294,11 +294,11 @@ class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
             },
         }
 
-    def warp(self, images, masks, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, output_device="CPU"):
+    def warp(self, images, binary_images, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, output_device="CPU"):
         latent_frames = (num_frames - 1) // 4 + 1
         return super().warp(
             images=images,
-            masks=masks,
+            masks=binary_images,
             noise_channels=16,
             noise_downtemp_interp=noise_downtemp_interp,
             degradation=degradation,
@@ -317,7 +317,7 @@ class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
        return {
             "required": {
                 "images": ("IMAGE", {"tooltip": "Input images to be warped"}),
-                "masks": ("MASK", {"tooltip": "Input masks to define the degradation boundaries"}),
+                "binary_images": ("IMAGE", {"tooltip": "Input binary images to define the degradation boundaries"}),
                 "noise_downtemp_interp": (["nearest", "blend", "blend_norm", "randn", "disabled"], {"tooltip": "Interpolation method(s) for down-temporal noise"}),
                 "num_frames": ("INT", {"default": 49, "min": 1, "max": 2048, "step": 1, "tooltip": "Interpolate to this many frames"}),
                 "boundary_degradation": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp at the boundaries"}),
@@ -329,11 +329,11 @@ class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
     RETURN_TYPES = ("LATENT", "IMAGE",)
     RETURN_NAMES = ("noise", "visualization",)
 
-    def warp(self, images, masks, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
+    def warp(self, images, binary_images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
         latent_frames = (num_frames - 1) // 4 + 1
         return super().warp(
             images=images,
-            masks=masks,
+            masks=binary_images,
             noise_channels=16,
             noise_downtemp_interp=noise_downtemp_interp,
             degradation=degradation,
