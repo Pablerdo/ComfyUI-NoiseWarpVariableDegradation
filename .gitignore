@@ -13,3 +13,9 @@ test/
 compile_check.py
 *.mp4
 test.py
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff

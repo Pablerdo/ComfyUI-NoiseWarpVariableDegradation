@@ -9,7 +9,7 @@ from comfy.utils import ProgressBar
 
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-from .noisewarp.noise_warp import NoiseWarper, mix_new_noise_variable_degradation
+from .noisewarp.noise_warp import NoiseWarper, double_mask_border_region, compute_alpha_map_2levels
 from .noisewarp.raft import RaftOpticalFlow
 
 def get_downtemp_noise(noise, noise_downtemp_interp, interp_to=13):   
@@ -162,6 +162,84 @@ class WarpedNoiseBase:
 
         return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
 
+    def _apply_spatial_degradation_to_warped_noise(warped_noise, alpha_map, upscale_factor=8):
+        """
+        Apply spatial degradation to warped noise by upscaling, applying alpha map, and downscaling
+        
+        Args:
+            warped_noise: The warped noise tensor
+            alpha_map: The degradation map (0 = keep original, 1 = full degradation)
+            upscale_factor: How much to upscale for applying the degradation
+        
+        Returns:
+            Modified warped noise with spatial degradation applied
+        """
+
+        # TODO: make the upscale factor something that is derived from the difference in the spatial dimensions of the warped_noise and the alpha_map
+
+        # Get original shape
+        original_shape = warped_noise.shape
+        
+        # Reshape if needed for interpolation (e.g., from BTCHW to BCHW)
+        if len(original_shape) == 5:  # BTCHW format
+            b, t, c, h, w = original_shape
+            reshaped_noise = warped_noise.reshape(b*t, c, h, w)
+        else:
+            reshaped_noise = warped_noise
+        
+        # 1. Upscale the noise to "pixel space"
+        upscaled_noise = F.interpolate(
+            reshaped_noise,
+            scale_factor=upscale_factor,
+            mode='bilinear'
+        )
+        
+        # 2. Create random noise of the same shape
+        random_noise = torch.randn_like(upscaled_noise)
+        
+        print(f"original alpha_map shape: {alpha_map.shape}")
+
+        alpha_map_resized = alpha_map
+        # # 3. Resize alpha_map to match upscaled noise spatial dimensions
+        # if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
+        #     # Ensure alpha_map has proper batch/channel dims for interpolation
+        #     if len(alpha_map.shape) < len(upscaled_noise.shape):
+        #         alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
+                
+        #     alpha_map_resized = F.interpolate(
+        #         alpha_map,
+        #         size=upscaled_noise.shape[-2:],
+        #         mode='bilinear'
+        #     )
+        # else:
+        #     print("did not resize alpha_map")
+        #     alpha_map_resized = alpha_map
+            
+        # Ensure alpha map has proper shape for broadcasting
+        while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
+            alpha_map_resized = alpha_map_resized.unsqueeze(1)
+        
+        print(f"alpha_map_resized shape: {alpha_map_resized.shape}")
+        print(f"upscaled_noise shape: {upscaled_noise.shape}")
+        # 4. Apply the degradation by blending original and random noise
+        degraded_noise = (
+            upscaled_noise * (1 - alpha_map_resized) + 
+            random_noise * alpha_map_resized
+        )
+        
+        # 5. Downscale back to original resolution
+        downscaled_noise = F.interpolate(
+            degraded_noise,
+            size=reshaped_noise.shape[-2:],
+            mode='area'
+        )
+        
+        # 6. Reshape back to original format if needed
+        if len(original_shape) == 5:  # BTCHW format
+            downscaled_noise = downscaled_noise.reshape(original_shape)
+        
+        return downscaled_noise
+
     def warp(self, images, masks, noise_channels, noise_downtemp_interp, degradation, boundary_degradation, second_boundary_degradation,
              target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None, return_flows=True, output_device="CPU"):
         device = mm.get_torch_device()
@@ -178,6 +256,32 @@ class WarpedNoiseBase:
 
         # Process noise tensor
         noise_tensor = torch.from_numpy(numpy_noises).squeeze(1).cpu().float()
+
+        print(f"noise_tensor shape: {noise_tensor.shape}")
+
+        # B, H, W, C = masks.shape
+
+        # convert BHWC to BCHW
+        mask_frames = masks.permute(0, 3, 1, 2)
+
+        print(f"mask_frames shape: {mask_frames.shape}")
+
+
+        # Create alpha map for variable degradation (moved from mix_new_noise_variable_degradation)
+        # First, compute boundary masks in pixel space
+        boundary_px1 = 10  # innermost boundary
+        boundary_px2 = 20  # outer boundary
+        boundary_mask, second_boundary_mask, mask_tensor = double_mask_border_region(mask_frames, boundary_px1, boundary_px2)
+
+        # Then compute alpha map in pixel space
+        pixel_alpha_map = compute_alpha_map_2levels(mask_tensor, boundary_mask, second_boundary_mask, 
+                                                boundary_degradation, second_boundary_degradation, degradation)
+        
+        print(f"pixel_alpha_map shape: {pixel_alpha_map.shape}")
+        print(f"pixel_alpha_map: {pixel_alpha_map[0]}")
+
+        noise_tensor = self._apply_spatial_degradation_to_warped_noise(noise_tensor, pixel_alpha_map)
+
         downtemp_noise_tensor = get_downtemp_noise(
             noise_tensor,
             noise_downtemp_interp=noise_downtemp_interp,
@@ -185,8 +289,8 @@ class WarpedNoiseBase:
         )
         
         downtemp_noise_tensor = downtemp_noise_tensor[None]
-        downtemp_noise_tensor = mix_new_noise_variable_degradation(downtemp_noise_tensor, masks, boundary_degradation, second_boundary_degradation, degradation)
-        print(downtemp_noise_tensor.shape)
+
+        print(f"downtemp_noise_tensor shape: {downtemp_noise_tensor.shape}")
 
         # Process visualization tensors
         vis_tensor_noises = downtemp_noise_tensor

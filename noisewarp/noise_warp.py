@@ -615,9 +615,9 @@ def blend_noise_alpha_map(noise_background: torch.Tensor, noise_foreground: torc
     return (noise_foreground * alpha_map + noise_background * (1-alpha_map))/(alpha_map ** 2 + (1-alpha_map) ** 2)**.5
 
 
-def double_mask_border_region(mask: torch.Tensor, 
+def double_mask_border_region(mask_tensor: torch.Tensor, 
                               border_px1=10,  # innermost boundary
-                              border_px2=20): # outer boundary
+                              border_px2=20) -> tuple[torch.Tensor, torch.Tensor]: # outer boundary
     """
     Returns (near_border_1, near_border_2_only) for the given mask:
       - near_border_1:  all pixels in the mask that are ≤ border_px1 from the boundary
@@ -631,15 +631,20 @@ def double_mask_border_region(mask: torch.Tensor,
       4) near_border_2_only = near_border_2 - near_border_1
     """
     # Get original shape and handle both single masks and batches of masks
-    orig_shape = mask.shape
+    orig_shape = mask_tensor.shape
+    
+    # Convert mask to a single channel if it has multiple channels
+    if len(orig_shape) == 4 and orig_shape[1] > 1:  # BCHW with C > 1
+        # Average across channels to get a single channel mask
+        mask_tensor = mask_tensor.mean(dim=1, keepdim=True)
     
     # Reshape to add channel dim if not present, but preserve batch dimensions
     if len(orig_shape) == 2:  # Single HW mask
-        mask_4d = mask.unsqueeze(0).unsqueeze(0).float()  # shape [1,1,H,W]
+        mask_4d = mask_tensor.unsqueeze(0).unsqueeze(0).float()  # shape [1,1,H,W]
     elif len(orig_shape) == 3:  # BHW format (sequence of masks)
-        mask_4d = mask.unsqueeze(1).float()  # shape [B,1,H,W]
+        mask_4d = mask_tensor.unsqueeze(1).float()  # shape [B,1,H,W]
     elif len(orig_shape) == 4:  # Already BCHW format
-        mask_4d = mask.float()
+        mask_4d = mask_tensor.float()
     else:
         raise ValueError(f"Unexpected mask shape: {orig_shape}")
     
@@ -661,17 +666,9 @@ def double_mask_border_region(mask: torch.Tensor,
     # Step 3: subtract near_border_1 from near_border_2 → region in [border_px1+1..border_px2]
     near_border_2_only = (near_border_2 - near_border_1).clamp_min_(0.0)
     
-    # Remove the channel dimension but keep batch dimensions
-    if len(orig_shape) == 2:  # Was a single HW mask
-        near_border_1 = near_border_1.squeeze(0).squeeze(0)  # back to HW
-        near_border_2_only = near_border_2_only.squeeze(0).squeeze(0)  # back to HW
-    elif len(orig_shape) == 3:  # Was BHW format
-        near_border_1 = near_border_1.squeeze(1)  # back to BHW
-        near_border_2_only = near_border_2_only.squeeze(1)  # back to BHW
-    elif len(orig_shape) == 4:  # Was BCHW format
-        pass  # Already in correct format
-    
-    return near_border_1, near_border_2_only
+    # Ensure we're returning [B,1,H,W] format for both tensors
+    return near_border_1, near_border_2_only, mask_tensor
+
 
 def compute_alpha_map_2levels(mask: torch.Tensor,
                               near_border_1: torch.Tensor,
@@ -686,28 +683,62 @@ def compute_alpha_map_2levels(mask: torch.Tensor,
       - inside but not in either => alpha_inner
       - outside mask => 0
     mask, near_border_1, near_border_2_only => [...,H,W]
-    returns alpha_map => [...,H,W] in [0,1], preserving input batch dimensions.
+    returns alpha_map => [B,1,H,W] in [0,1], preserving batch dimension.
     """
-    alpha_map = torch.zeros_like(mask, dtype=torch.float32)
+    # Print shapes for debugging
+    print(f"In compute_alpha_map_2levels - mask shape: {mask.shape}")
+    print(f"In compute_alpha_map_2levels - near_border_1 shape: {near_border_1.shape}")
+    print(f"In compute_alpha_map_2levels - near_border_2_only shape: {near_border_2_only.shape}")
     
-    # region 1
-    alpha_map = torch.where(near_border_1 > 0.5, 
-                           torch.tensor(boundary_alpha, device=mask.device, dtype=torch.float32), 
-                           alpha_map)
+    # Create a single-channel alpha map
+    B = mask.shape[0]
+    H = mask.shape[-2]
+    W = mask.shape[-1]
     
-    # region 2 (the annulus between border_px1..border_px2)
-    alpha_map = torch.where(near_border_2_only > 0.5,
-                           torch.tensor(second_boundary_alpha, device=mask.device, dtype=torch.float32),
-                           alpha_map)
+    # Ensure all inputs have consistent shapes
+    # Ensure mask is single channel with shape [B,1,H,W]
+    if len(mask.shape) == 4 and mask.shape[1] > 1:
+        mask = mask.mean(dim=1, keepdim=True)
+    elif len(mask.shape) == 3:
+        mask = mask.unsqueeze(1)
     
-    # inside but not in near_border_1 or near_border_2
-    # find them by: in the mask, but not in near_border_1 or near_border_2_only
-    inside_not_border = (mask > 0.5) & (near_border_1 < 0.5) & (near_border_2_only < 0.5)
-    alpha_map = torch.where(inside_not_border,
-                           torch.tensor(alpha_inner, device=mask.device, dtype=torch.float32),
-                           alpha_map)
+    # Ensure near_border_1 has shape [B,1,H,W]
+    if len(near_border_1.shape) == 3:
+        near_border_1 = near_border_1.unsqueeze(1)
     
-    # outside mask => alpha=0 (already set to 0 by zeros_like).
+    # Ensure near_border_2_only has shape [B,1,H,W]
+    if len(near_border_2_only.shape) == 3:
+        near_border_2_only = near_border_2_only.unsqueeze(1)
+    
+    # Create zero-filled alpha map
+    alpha_map = torch.zeros((B, 1, H, W), device=mask.device, dtype=torch.float32)
+    
+    # Create scalar tensors for the alpha values
+    boundary_alpha_tensor = torch.tensor(boundary_alpha, device=mask.device, dtype=torch.float32)
+    second_boundary_alpha_tensor = torch.tensor(second_boundary_alpha, device=mask.device, dtype=torch.float32)
+    alpha_inner_tensor = torch.tensor(alpha_inner, device=mask.device, dtype=torch.float32)
+    
+    # Debug values by looking at sum
+    print(f"Near border 1 sum: {near_border_1.sum()}")
+    print(f"Near border 2 only sum: {near_border_2_only.sum()}")
+    
+    # region 1 - inner boundary
+    alpha_map = torch.where(near_border_1 > 0.5, boundary_alpha_tensor, alpha_map)
+    
+    # region 2 - outer boundary (the annulus between border_px1..border_px2)
+    alpha_map = torch.where(near_border_2_only > 0.5, second_boundary_alpha_tensor, alpha_map)
+    
+    # region 3 - inside the mask but not in either boundary
+    inside_not_border = (mask > 0.5) & (near_border_1 <= 0.5) & (near_border_2_only <= 0.5)
+    alpha_map = torch.where(inside_not_border, alpha_inner_tensor, alpha_map)
+    
+    # Print summary of alpha map values
+    print(f"Alpha map - regions with value {boundary_alpha}: {(alpha_map == boundary_alpha_tensor).sum().item()} pixels")
+    print(f"Alpha map - regions with value {second_boundary_alpha}: {(alpha_map == second_boundary_alpha_tensor).sum().item()} pixels")
+    print(f"Alpha map - regions with value {alpha_inner}: {(alpha_map == alpha_inner_tensor).sum().item()} pixels")
+    print(f"Alpha map - regions with value 0: {(alpha_map == 0).sum().item()} pixels")
+    
+    # outside mask => alpha=0 (already set to 0 by zeros_like)
     return alpha_map
 
 def mix_new_noise_variable_degradation(noise, masks, boundary_alpha, second_boundary_alpha, inner_alpha, boundary_px1=10, boundary_px2=20):
