@@ -162,7 +162,7 @@ class WarpedNoiseBase:
 
         return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
 
-    def _apply_spatial_degradation_to_warped_noise(warped_noise, alpha_map, upscale_factor=8):
+    def _apply_spatial_degradation_to_warped_noise(self, warped_noise, alpha_map, upscale_factor=8):
         """
         Apply spatial degradation to warped noise by upscaling, applying alpha map, and downscaling
         
