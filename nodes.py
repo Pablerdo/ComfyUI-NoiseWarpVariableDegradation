@@ -226,20 +226,20 @@ class WarpedNoiseBase:
         print(f"original alpha_map shape: {alpha_map.shape}")
 
         alpha_map_resized = alpha_map
-        # # 3. Resize alpha_map to match upscaled noise spatial dimensions
-        # if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
-        #     # Ensure alpha_map has proper batch/channel dims for interpolation
-        #     if len(alpha_map.shape) < len(upscaled_noise.shape):
-        #         alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
+        # 3. Resize alpha_map to match upscaled noise spatial dimensions
+        if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
+            # Ensure alpha_map has proper batch/channel dims for interpolation
+            if len(alpha_map.shape) < len(upscaled_noise.shape):
+                alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
                 
-        #     alpha_map_resized = F.interpolate(
-        #         alpha_map,
-        #         size=upscaled_noise.shape[-2:],
-        #         mode='bilinear'
-        #     )
-        # else:
-        #     print("did not resize alpha_map")
-        #     alpha_map_resized = alpha_map
+            alpha_map_resized = F.interpolate(
+                alpha_map,
+                size=upscaled_noise.shape[-2:],
+                mode='bilinear'
+            )
+        else:
+            print("did not resize alpha_map")
+            alpha_map_resized = alpha_map
             
         # Ensure alpha map has proper shape for broadcasting
         while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
