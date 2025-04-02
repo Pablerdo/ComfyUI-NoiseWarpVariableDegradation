@@ -213,33 +213,43 @@ class WarpedNoiseBase:
         else:
             reshaped_noise = warped_noise
         
-        # 1. Upscale the noise to "pixel space"
+        # 1. Create random noise of the same shape
+        random_noise = torch.randn_like(reshaped_noise)
+        # random_noise = torch.randn_like(upscaled_noise)
+        
+
+
+        # 2. Upscale the original noise to "pixel space"
         upscaled_noise = F.interpolate(
             reshaped_noise,
             scale_factor=upscale_factor,
             mode='bilinear'
         )
-        
-        # 2. Create random noise of the same shape
-        random_noise = torch.randn_like(upscaled_noise)
-        
+
+        # 3. Upscale the random noise to "pixel space"
+        upscaled_random_noise = F.interpolate(
+            random_noise,
+            scale_factor=upscale_factor,
+            mode='bilinear'
+        )
+
         print(f"original alpha_map shape: {alpha_map.shape}")
 
         alpha_map_resized = alpha_map
         # 3. Resize alpha_map to match upscaled noise spatial dimensions
-        if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
-            # Ensure alpha_map has proper batch/channel dims for interpolation
-            if len(alpha_map.shape) < len(upscaled_noise.shape):
-                alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
+        # if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
+        #     # Ensure alpha_map has proper batch/channel dims for interpolation
+        #     if len(alpha_map.shape) < len(upscaled_noise.shape):
+        #         alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
                 
-            alpha_map_resized = F.interpolate(
-                alpha_map,
-                size=upscaled_noise.shape[-2:],
-                mode='bilinear'
-            )
-        else:
-            print("did not resize alpha_map")
-            alpha_map_resized = alpha_map
+        #     alpha_map_resized = F.interpolate(
+        #         alpha_map,
+        #         size=upscaled_noise.shape[-2:],
+        #         mode='bilinear'
+        #     )
+        # else:
+        #     print("did not resize alpha_map")
+        #     alpha_map_resized = alpha_map
             
         # Ensure alpha map has proper shape for broadcasting
         while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
@@ -247,14 +257,9 @@ class WarpedNoiseBase:
         
         print(f"alpha_map_resized shape: {alpha_map_resized.shape}")
         print(f"upscaled_noise shape: {upscaled_noise.shape}")
+        
         # 4. Apply the degradation by blending original and random noise
-
-        degraded_noise = self._blend_noise_with_alpha_tensor(upscaled_noise, random_noise, alpha_map_resized)
-
-        # degraded_noise = (
-        #     upscaled_noise * (1 - alpha_map_resized) + 
-        #     random_noise * alpha_map_resized
-        # )
+        degraded_noise = self._blend_noise_with_alpha_tensor(upscaled_noise, upscaled_random_noise, alpha_map_resized)
         
         # 5. Downscale back to original resolution
         downscaled_noise = F.interpolate(
@@ -354,7 +359,7 @@ class WarpedNoiseBase:
         down_noise = F.interpolate(noise, scale_factor=1/downscale_factor, mode='area')
         return down_noise * downscale_factor
 
-class GetWarpedNoiseFromVideo(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -378,7 +383,7 @@ class GetWarpedNoiseFromVideo(WarpedNoiseBase):
             },
         }
 
-class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoAnimateDiffVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -412,7 +417,7 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
             output_device=output_device
         )
 
-class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoCogVideoXVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
        return {
@@ -444,7 +449,7 @@ class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
             output_device=output_device
         )
     
-class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
        return {
@@ -483,14 +488,14 @@ class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
 
 
 NODE_CLASS_MAPPINGS = {
-    "GetWarpedNoiseFromVideo": GetWarpedNoiseFromVideo,
-    "GetWarpedNoiseFromVideoAnimateDiff": GetWarpedNoiseFromVideoAnimateDiff,
-    "GetWarpedNoiseFromVideoCogVideoX": GetWarpedNoiseFromVideoCogVideoX,
-    "GetWarpedNoiseFromVideoHunyuan": GetWarpedNoiseFromVideoHunyuan,
+    "GetWarpedNoiseFromVideoVariableDegradation": GetWarpedNoiseFromVideoVariableDegradation,
+    "GetWarpedNoiseFromVideoAnimateDiffVariableDegradation": GetWarpedNoiseFromVideoAnimateDiffVariableDegradation,
+    "GetWarpedNoiseFromVideoCogVideoXVariableDegradation": GetWarpedNoiseFromVideoCogVideoXVariableDegradation,
+    "GetWarpedNoiseFromVideoHunyuanVariableDegradation": GetWarpedNoiseFromVideoHunyuanVariableDegradation,
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "GetWarpedNoiseFromVideo": "GetWarpedNoiseFromVideo",
-    "GetWarpedNoiseFromVideoAnimateDiff": "GetWarpedNoiseFromVideoAnimateDiff",
-    "GetWarpedNoiseFromVideoCogVideoX": "GetWarpedNoiseFromVideoCogVideoX",
-    "GetWarpedNoiseFromVideoHunyuan": "GetWarpedNoiseFromVideoHunyuan",
+    "GetWarpedNoiseFromVideoVariableDegradation": "GetWarpedNoiseFromVideoVariableDegradation",
+    "GetWarpedNoiseFromVideoAnimateDiffVariableDegradation": "GetWarpedNoiseFromVideoAnimateDiffVariableDegradation",
+    "GetWarpedNoiseFromVideoCogVideoXVariableDegradation": "GetWarpedNoiseFromVideoCogVideoXVariableDegradation",
+    "GetWarpedNoiseFromVideoHunyuanVariableDegradation": "GetWarpedNoiseFromVideoHunyuanVariableDegradation",
     }
