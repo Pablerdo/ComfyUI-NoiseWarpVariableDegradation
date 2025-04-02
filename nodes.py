@@ -161,6 +161,32 @@ class WarpedNoiseBase:
             pbar.update(1)
 
         return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
+    
+    def _blend_noise_with_alpha_tensor(self, noise_background, noise_foreground, alpha_map):
+        """
+        Apply variance-preserving noise blending with a spatially varying alpha map.
+        
+        Args:
+            noise_background: Background noise tensor to blend
+            noise_foreground: Foreground noise tensor to blend 
+            alpha_map: Tensor containing alpha values (0-1) for each spatial position
+            
+        Returns:
+            Blended noise tensor with the same shape as the inputs
+        """
+        # Ensure alpha_map has proper broadcasting dimensions
+        while len(alpha_map.shape) < len(noise_background.shape):
+            alpha_map = alpha_map.unsqueeze(1)
+        
+        # Apply variance-preserving blend formula
+        numerator = noise_foreground * alpha_map + noise_background * (1 - alpha_map)
+        denominator = (alpha_map ** 2 + (1 - alpha_map) ** 2) ** 0.5
+        
+        # Avoid division by zero
+        denominator = torch.clamp(denominator, min=1e-6)
+        
+        # Return the blended result
+        return numerator / denominator
 
     def _apply_spatial_degradation_to_warped_noise(self, warped_noise, alpha_map, upscale_factor=8):
         """
@@ -222,10 +248,13 @@ class WarpedNoiseBase:
         print(f"alpha_map_resized shape: {alpha_map_resized.shape}")
         print(f"upscaled_noise shape: {upscaled_noise.shape}")
         # 4. Apply the degradation by blending original and random noise
-        degraded_noise = (
-            upscaled_noise * (1 - alpha_map_resized) + 
-            random_noise * alpha_map_resized
-        )
+
+        degraded_noise = self._blend_noise_with_alpha_tensor(upscaled_noise, random_noise, alpha_map_resized)
+
+        # degraded_noise = (
+        #     upscaled_noise * (1 - alpha_map_resized) + 
+        #     random_noise * alpha_map_resized
+        # )
         
         # 5. Downscale back to original resolution
         downscaled_noise = F.interpolate(

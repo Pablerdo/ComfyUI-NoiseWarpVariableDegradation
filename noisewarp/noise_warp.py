@@ -710,8 +710,8 @@ def compute_alpha_map_2levels(mask: torch.Tensor,
     if len(near_border_2_only.shape) == 3:
         near_border_2_only = near_border_2_only.unsqueeze(1)
     
-    # Create zero-filled alpha map
-    alpha_map = torch.zeros((B, 1, H, W), device=mask.device, dtype=torch.float32)
+    # Create ones-filled alpha map
+    alpha_map = torch.ones((B, 1, H, W), device=mask.device, dtype=torch.float32)
     
     # Create scalar tensors for the alpha values
     boundary_alpha_tensor = torch.tensor(boundary_alpha, device=mask.device, dtype=torch.float32)
