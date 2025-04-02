@@ -741,34 +741,6 @@ def compute_alpha_map_2levels(mask: torch.Tensor,
     # outside mask => alpha=0 (already set to 0 by zeros_like)
     return alpha_map
 
-def mix_new_noise_variable_degradation(noise, masks, boundary_alpha, second_boundary_alpha, inner_alpha, boundary_px1=10, boundary_px2=20):
-    """As alpha --> 1, noise is destroyed"""
-
-    if isinstance(noise, torch.Tensor): 
-        print(f"mix_new_noise: noise is a torch.Tensor with shape {noise.shape}")
-        print(f"masks shape: {masks.shape}")
-        
-        boundary_mask, second_boundary_mask = double_mask_border_region(masks, boundary_px1, boundary_px2)
-        
-        alpha_map = compute_alpha_map_2levels(masks, boundary_mask, second_boundary_mask, 
-                                             boundary_alpha, second_boundary_alpha, inner_alpha)
-        
-        # Reshape alpha_map to match noise dimensions if needed
-        if len(alpha_map.shape) < len(noise.shape):
-            # Expand alpha_map to match noise dimensions
-            # For example, if noise is [1,16,13,64,64] and alpha_map is [13,64,64]
-            # we need to make alpha_map [1,1,13,64,64]
-            for _ in range(len(noise.shape) - len(alpha_map.shape)):
-                alpha_map = alpha_map.unsqueeze(0)
-        
-        return blend_noise_alpha_map(noise, torch.randn_like(noise), alpha_map)
-    elif isinstance(noise, np.ndarray): 
-        print(f"mix_new_noise: noise is a np.ndarray")
-        # TODO: Implement this
-        # return blend_noise(noise, np.random.randn(*noise.shape), alpha_map)
-        return None
-    else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
-
 def mix_new_noise(noise, alpha):
     """As alpha --> 1, noise is destroyed"""
     if isinstance(noise, torch.Tensor): return blend_noise(noise, torch.randn_like(noise), alpha)

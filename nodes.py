@@ -188,21 +188,112 @@ class WarpedNoiseBase:
         # Return the blended result
         return numerator / denominator
 
+    # def _apply_spatial_degradation_to_warped_noise(self, warped_noise, alpha_map, upscale_factor=8):
+    #     """
+    #     Apply spatial degradation to warped noise by upscaling, applying alpha map, and downscaling
+        
+    #     Args:
+    #         warped_noise: The warped noise tensor
+    #         alpha_map: The degradation map (0 = keep original, 1 = full degradation)
+    #         upscale_factor: How much to upscale for applying the degradation
+        
+    #     Returns:
+    #         Modified warped noise with spatial degradation applied
+    #     """
+
+    #     # TODO: make the upscale factor something that is derived from the difference in the spatial dimensions of the warped_noise and the alpha_map
+
+    #     # Get original shape
+    #     original_shape = warped_noise.shape
+        
+    #     # Reshape if needed for interpolation (e.g., from BTCHW to BCHW)
+    #     if len(original_shape) == 5:  # BTCHW format
+    #         b, t, c, h, w = original_shape
+    #         reshaped_noise = warped_noise.reshape(b*t, c, h, w)
+    #     else:
+    #         reshaped_noise = warped_noise
+        
+    #     # 1. Create random noise of the same shape
+    #     random_noise = torch.randn_like(reshaped_noise)
+    #     # random_noise = torch.randn_like(upscaled_noise)
+        
+
+
+    #     # 2. Upscale the original noise to "pixel space"
+    #     upscaled_noise = F.interpolate(
+    #         reshaped_noise,
+    #         scale_factor=upscale_factor,
+    #         mode='bilinear'
+    #     )
+
+    #     # 3. Upscale the random noise to "pixel space"
+    #     upscaled_random_noise = F.interpolate(
+    #         random_noise,
+    #         scale_factor=upscale_factor,
+    #         mode='bilinear'
+    #     )
+
+    #     print(f"original alpha_map shape: {alpha_map.shape}")
+
+    #     alpha_map_resized = alpha_map
+    #     # 3. Resize alpha_map to match upscaled noise spatial dimensions
+    #     # if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
+    #     #     # Ensure alpha_map has proper batch/channel dims for interpolation
+    #     #     if len(alpha_map.shape) < len(upscaled_noise.shape):
+    #     #         alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
+                
+    #     #     alpha_map_resized = F.interpolate(
+    #     #         alpha_map,
+    #     #         size=upscaled_noise.shape[-2:],
+    #     #         mode='bilinear'
+    #     #     )
+    #     # else:
+    #     #     print("did not resize alpha_map")
+    #     #     alpha_map_resized = alpha_map
+            
+    #     # Ensure alpha map has proper shape for broadcasting
+
+
+    #     # while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
+    #     #     alpha_map_resized = alpha_map_resized.unsqueeze(1)
+        
+    #     # for the experiment
+    #     while len(alpha_map_resized.shape) < len(reshaped_noise.shape):
+    #         alpha_map_resized = alpha_map_resized.unsqueeze(1)
+
+    #     print(f"alpha_map_resized shape: {alpha_map_resized.shape}")
+    #     print(f"upscaled_noise shape: {upscaled_noise.shape}")
+        
+    #     # 4. Apply the degradation by blending original and random noise
+
+    #     # using the original noises for now, for an experiment
+    #     degraded_noise = self._blend_noise_with_alpha_tensor(reshaped_noise, random_noise, alpha_map_resized)
+        
+    #     # 5. Downscale back to original resolution
+    #     downscaled_noise = F.interpolate(
+    #         degraded_noise,
+    #         size=reshaped_noise.shape[-2:],
+    #         mode='area'
+    #     )
+        
+    #     # 6. Reshape back to original format if needed
+    #     if len(original_shape) == 5:  # BTCHW format
+    #         downscaled_noise = downscaled_noise.reshape(original_shape)
+        
+    #     return downscaled_noise
+
     def _apply_spatial_degradation_to_warped_noise(self, warped_noise, alpha_map, upscale_factor=8):
         """
-        Apply spatial degradation to warped noise by upscaling, applying alpha map, and downscaling
+        Apply spatial degradation to warped noise by downscaling the alpha map to match the noise dimensions
         
         Args:
             warped_noise: The warped noise tensor
             alpha_map: The degradation map (0 = keep original, 1 = full degradation)
-            upscale_factor: How much to upscale for applying the degradation
+            upscale_factor: Not used directly, but kept for API compatibility
         
         Returns:
             Modified warped noise with spatial degradation applied
         """
-
-        # TODO: make the upscale factor something that is derived from the difference in the spatial dimensions of the warped_noise and the alpha_map
-
         # Get original shape
         original_shape = warped_noise.shape
         
@@ -213,74 +304,39 @@ class WarpedNoiseBase:
         else:
             reshaped_noise = warped_noise
         
-        # 1. Create random noise of the same shape
-        random_noise = torch.randn_like(reshaped_noise)
-        # random_noise = torch.randn_like(upscaled_noise)
-        
-
-
-        # 2. Upscale the original noise to "pixel space"
-        upscaled_noise = F.interpolate(
-            reshaped_noise,
-            scale_factor=upscale_factor,
-            mode='bilinear'
-        )
-
-        # 3. Upscale the random noise to "pixel space"
-        upscaled_random_noise = F.interpolate(
-            random_noise,
-            scale_factor=upscale_factor,
-            mode='bilinear'
-        )
-
+        print(f"warped_noise shape: {reshaped_noise.shape}")
         print(f"original alpha_map shape: {alpha_map.shape}")
-
-        alpha_map_resized = alpha_map
-        # 3. Resize alpha_map to match upscaled noise spatial dimensions
-        # if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
-        #     # Ensure alpha_map has proper batch/channel dims for interpolation
-        #     if len(alpha_map.shape) < len(upscaled_noise.shape):
-        #         alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
-                
-        #     alpha_map_resized = F.interpolate(
-        #         alpha_map,
-        #         size=upscaled_noise.shape[-2:],
-        #         mode='bilinear'
-        #     )
-        # else:
-        #     print("did not resize alpha_map")
-        #     alpha_map_resized = alpha_map
+        
+        # 1. Downscale the alpha map to match the noise dimensions
+        # Ensure alpha_map has proper batch/channel dims for interpolation
+        downscaled_alpha = alpha_map
+        if len(alpha_map.shape) < 4:  # If alpha_map doesn't have a channel dimension
+            downscaled_alpha = alpha_map.unsqueeze(1)  # Add channel dim if needed
             
-        # Ensure alpha map has proper shape for broadcasting
-
-
-        # while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
-        #     alpha_map_resized = alpha_map_resized.unsqueeze(1)
-        
-        # for the experiment
-        while len(alpha_map_resized.shape) < len(reshaped_noise.shape):
-            alpha_map_resized = alpha_map_resized.unsqueeze(1)
-
-        print(f"alpha_map_resized shape: {alpha_map_resized.shape}")
-        print(f"upscaled_noise shape: {upscaled_noise.shape}")
-        
-        # 4. Apply the degradation by blending original and random noise
-
-        # using the original noises for now, for an experiment
-        degraded_noise = self._blend_noise_with_alpha_tensor(reshaped_noise, random_noise, alpha_map_resized)
-        
-        # 5. Downscale back to original resolution
-        downscaled_noise = F.interpolate(
-            degraded_noise,
-            size=reshaped_noise.shape[-2:],
-            mode='area'
+        # Downscale to match noise spatial dimensions
+        downscaled_alpha = F.interpolate(
+            downscaled_alpha,
+            size=reshaped_noise.shape[-2:],  # Match height and width of noise
+            mode='area'  # Area interpolation works best for downscaling
         )
         
-        # 6. Reshape back to original format if needed
-        if len(original_shape) == 5:  # BTCHW format
-            downscaled_noise = downscaled_noise.reshape(original_shape)
+        # 2. Create random noise at the same resolution as the warped noise
+        random_noise = torch.randn_like(reshaped_noise)
         
-        return downscaled_noise
+        # 3. Ensure alpha map has proper shape for broadcasting
+        while len(downscaled_alpha.shape) < len(reshaped_noise.shape):
+            downscaled_alpha = downscaled_alpha.unsqueeze(1)
+        
+        print(f"downscaled_alpha shape: {downscaled_alpha.shape}")
+        
+        # 4. Apply the degradation by blending original and random noise using variance-preserving blend
+        degraded_noise = self._blend_noise_with_alpha_tensor(reshaped_noise, random_noise, downscaled_alpha)
+        
+        # 5. Reshape back to original format if needed
+        if len(original_shape) == 5:  # BTCHW format
+            degraded_noise = degraded_noise.reshape(original_shape)
+        
+        return degraded_noise
 
     def warp(self, images, masks, noise_channels, noise_downtemp_interp, degradation, boundary_degradation, second_boundary_degradation,
              target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None, return_flows=True, output_device="CPU"):
