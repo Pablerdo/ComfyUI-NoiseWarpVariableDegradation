@@ -2,6 +2,8 @@ import torch
 import torchvision.transforms
 from torchvision.models.optical_flow import raft_large, raft_small
 import torch.nn.functional as F
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 class RaftOpticalFlow():
     def __init__(self, device, version='large'):
