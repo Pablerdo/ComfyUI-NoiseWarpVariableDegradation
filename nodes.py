@@ -252,14 +252,22 @@ class WarpedNoiseBase:
         #     alpha_map_resized = alpha_map
             
         # Ensure alpha map has proper shape for broadcasting
-        while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
-            alpha_map_resized = alpha_map_resized.unsqueeze(1)
+
+
+        # while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
+        #     alpha_map_resized = alpha_map_resized.unsqueeze(1)
         
+        # for the experiment
+        while len(alpha_map_resized.shape) < len(reshaped_noise.shape):
+            alpha_map_resized = alpha_map_resized.unsqueeze(1)
+
         print(f"alpha_map_resized shape: {alpha_map_resized.shape}")
         print(f"upscaled_noise shape: {upscaled_noise.shape}")
         
         # 4. Apply the degradation by blending original and random noise
-        degraded_noise = self._blend_noise_with_alpha_tensor(upscaled_noise, upscaled_random_noise, alpha_map_resized)
+
+        # using the original noises for now, for an experiment
+        degraded_noise = self._blend_noise_with_alpha_tensor(reshaped_noise, random_noise, alpha_map_resized)
         
         # 5. Downscale back to original resolution
         downscaled_noise = F.interpolate(
