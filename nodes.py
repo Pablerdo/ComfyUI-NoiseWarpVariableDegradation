@@ -332,6 +332,10 @@ class WarpedNoiseBase:
             repeat_count = (target_len + vis_alpha_map.shape[0] - 1) // vis_alpha_map.shape[0]
             vis_alpha_map = vis_alpha_map.repeat_interleave(repeat_count, dim=0)[:target_len]
 
+        print(f"vis_tensor_noises: {vis_tensor_noises[0]}")
+        print(f"vis_tensor_noises shape: {vis_tensor_noises.shape}")
+        print(f"vis_alpha_map: {vis_alpha_map[0]}")
+        print(f"vis_alpha_map shape: {vis_alpha_map.shape}")
         return {"samples":downtemp_noise_tensor}, vis_tensor_noises, vis_alpha_map, vis_tensor_flows
 
     @staticmethod
