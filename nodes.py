@@ -245,7 +245,8 @@ class WarpedNoiseBase:
         return degraded_noise
 
     def warp(self, images, masks, noise_channels, noise_downtemp_interp, degradation, boundary_degradation, second_boundary_degradation,
-             target_latent_count, latent_shape, spatial_downscale_factor, seed, model=None, sigmas=None, return_flows=True, output_device="CPU"):
+             target_latent_count, latent_shape, spatial_downscale_factor, seed, boundary_px1=10, boundary_px2=20, model=None, sigmas=None, return_flows=True, output_device="CPU"):
+        
         device = mm.get_torch_device()
         
         torch.manual_seed(seed)
@@ -366,6 +367,8 @@ class GetWarpedNoiseFromVideoVariableDegradation(WarpedNoiseBase):
                 "degradation": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp at the inner region of the mask"}),
                 "latent_shape": (["BTCHW", "BCTHW", "BCHW"], {"tooltip": "Shape of the output latent tensor, for example CogVideoX uses BCTHW, while HunYuanVideo uses BTCHW"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
+                "boundary_px1": ("INT", {"default": 10, "min": 0, "max": 1000, "step": 1, "tooltip": "First boundary margin size"}),
+                "boundary_px2": ("INT", {"default": 20, "min": 0, "max": 1000, "step": 1, "tooltip": "Second boundary margin size"}),
             },
             "optional": {
                 "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"} ),
@@ -387,12 +390,14 @@ class GetWarpedNoiseFromVideoAnimateDiffVariableDegradation(WarpedNoiseBase):
                 "model": ("MODEL", {"tooltip": "Optional, to get the latent scale factor"}),
                 "sigmas": ("SIGMAS", {"tooltip": "Optional, to scale the noise"}),
                 "output_device": (["GPU", "CPU"], {"default": "CPU", "tooltip": "Device to return the latents on"}),
+                "boundary_px1": ("INT", {"default": 10, "min": 0, "max": 1000, "step": 1, "tooltip": "First boundary margin size"}),
+                "boundary_px2": ("INT", {"default": 20, "min": 0, "max": 1000, "step": 1, "tooltip": "Second boundary margin size"}),
             },
         }
     RETURN_TYPES = ("LATENT", "IMAGE",)
     RETURN_NAMES = ("noise", "visualization",)
 
-    def warp(self, images, binary_images, degradation, seed, model=None, sigmas=None, output_device="CPU"):
+    def warp(self, images, binary_images, degradation, seed, model=None, sigmas=None, output_device="CPU", boundary_px1=10, boundary_px2=20):
         return super().warp(
             images=images,
             masks=binary_images,
@@ -403,6 +408,8 @@ class GetWarpedNoiseFromVideoAnimateDiffVariableDegradation(WarpedNoiseBase):
             latent_shape="BCHW",
             spatial_downscale_factor=8,
             seed=seed,
+            boundary_px1=boundary_px1,
+            boundary_px2=boundary_px2,
             model=model,
             sigmas=sigmas,
             return_flows=False,
@@ -421,10 +428,12 @@ class GetWarpedNoiseFromVideoCogVideoXVariableDegradation(WarpedNoiseBase):
                 "degradation": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
                 "output_device": (["GPU", "CPU"], {"default": "CPU", "tooltip": "Device to return the latents on"}),
+                "boundary_px1": ("INT", {"default": 10, "min": 0, "max": 1000, "step": 1, "tooltip": "First boundary margin size"}),
+                "boundary_px2": ("INT", {"default": 20, "min": 0, "max": 1000, "step": 1, "tooltip": "Second boundary margin size"}),
             },
         }
 
-    def warp(self, images, binary_images, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, output_device="CPU"):
+    def warp(self, images, binary_images, degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, output_device="CPU", boundary_px1=10, boundary_px2=20):
         latent_frames = (num_frames - 1) // 4 + 1
         return super().warp(
             images=images,
@@ -436,6 +445,8 @@ class GetWarpedNoiseFromVideoCogVideoXVariableDegradation(WarpedNoiseBase):
             latent_shape="BCTHW",
             spatial_downscale_factor=8,
             seed=seed,
+            boundary_px1=boundary_px1,
+            boundary_px2=boundary_px2,
             model=model,
             sigmas=sigmas,
             output_device=output_device
@@ -454,12 +465,14 @@ class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
                 "second_boundary_degradation": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp at the second boundary"}),
                 "degradation": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01, "tooltip": "Degradation level(s) for the noise warp at the inner region of the mask"}),
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
+                "boundary_px1": ("INT", {"default": 10, "min": 0, "max": 1000, "step": 1, "tooltip": "First boundary margin size"}),
+                "boundary_px2": ("INT", {"default": 20, "min": 0, "max": 1000, "step": 1, "tooltip": "Second boundary margin size"}),
             },
         }
     RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE", "IMAGE")
     RETURN_NAMES = ("noise", "visualization", "alpha_map_visualization", "optical_flows")
 
-    def warp(self, images, binary_images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
+    def warp(self, images, binary_images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, boundary_px1=10, boundary_px2=20):
         latent_frames = (num_frames - 1) // 4 + 1
         return super().warp(
             images=images,
@@ -475,7 +488,9 @@ class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
             seed=seed,
             model=model,
             sigmas=sigmas,
-            return_flows=False
+            return_flows=False,
+            boundary_px1=boundary_px1,
+            boundary_px2=boundary_px2
         )
     
 
