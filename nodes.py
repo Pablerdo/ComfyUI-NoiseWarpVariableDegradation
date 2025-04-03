@@ -323,14 +323,22 @@ class WarpedNoiseBase:
         downtemp_noise_tensor = downtemp_noise_tensor.to(device) if output_device == "GPU" else downtemp_noise_tensor.cpu()
 
         # Convert pixel_alpha_map to visualization-friendly format (BHWC)
-        vis_alpha_map = pixel_alpha_map.squeeze(1).unsqueeze(-1)  # Convert from BCHW to BHW1
-        vis_alpha_map = vis_alpha_map.cpu().float()
+        vis_alpha_map = pixel_alpha_map.squeeze(1)  # First remove channel dim (BCHW -> BHW)
+        vis_alpha_map = vis_alpha_map.cpu()  # Ensure tensor is on CPU
+        
+        # Scale values to 0-1 range and ensure it's properly formatted for visualization
+        vis_alpha_map = (vis_alpha_map * 255).clamp(0, 255).to(torch.uint8)
+        
+        # Convert to RGB by repeating the grayscale values across 3 channels
+        vis_alpha_map = vis_alpha_map.unsqueeze(-1).repeat(1, 1, 1, 3)
         
         # Ensure we have the right number of frames to match other visualizations
         target_len = images.shape[0]
         if vis_alpha_map.shape[0] != target_len:
             repeat_count = (target_len + vis_alpha_map.shape[0] - 1) // vis_alpha_map.shape[0]
             vis_alpha_map = vis_alpha_map.repeat_interleave(repeat_count, dim=0)[:target_len]
+        
+        vis_alpha_map = vis_alpha_map.float() / 255.0  # Convert back to float in 0-1 range
 
         print(f"vis_tensor_noises: {vis_tensor_noises[0]}")
         print(f"vis_tensor_noises shape: {vis_tensor_noises.shape}")
