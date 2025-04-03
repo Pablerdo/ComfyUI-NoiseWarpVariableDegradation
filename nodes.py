@@ -274,8 +274,6 @@ class WarpedNoiseBase:
 
         # Create alpha map for variable degradation (moved from mix_new_noise_variable_degradation)
         # First, compute boundary masks in pixel space
-        boundary_px1 = 10  # innermost boundary
-        boundary_px2 = 20  # outer boundary
         boundary_mask, second_boundary_mask, mask_tensor = double_mask_border_region(mask_frames, boundary_px1, boundary_px2)
 
         # Then compute alpha map in pixel space
