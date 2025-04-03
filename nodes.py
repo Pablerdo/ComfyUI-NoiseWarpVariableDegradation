@@ -114,8 +114,8 @@ def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
     return rgb
 
 class WarpedNoiseBase:
-    RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE",)
-    RETURN_NAMES = ("noise", "visualization", "optical_flows")
+    RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE", "IMAGE")
+    RETURN_NAMES = ("noise", "visualization", "optical_flows", "pixel_alpha_map")
     FUNCTION = "warp"
     CATEGORY = "NoiseWarpVariableDegradation"
 
@@ -187,100 +187,6 @@ class WarpedNoiseBase:
         
         # Return the blended result
         return numerator / denominator
-
-    # def _apply_spatial_degradation_to_warped_noise(self, warped_noise, alpha_map, upscale_factor=8):
-    #     """
-    #     Apply spatial degradation to warped noise by upscaling, applying alpha map, and downscaling
-        
-    #     Args:
-    #         warped_noise: The warped noise tensor
-    #         alpha_map: The degradation map (0 = keep original, 1 = full degradation)
-    #         upscale_factor: How much to upscale for applying the degradation
-        
-    #     Returns:
-    #         Modified warped noise with spatial degradation applied
-    #     """
-
-    #     # TODO: make the upscale factor something that is derived from the difference in the spatial dimensions of the warped_noise and the alpha_map
-
-    #     # Get original shape
-    #     original_shape = warped_noise.shape
-        
-    #     # Reshape if needed for interpolation (e.g., from BTCHW to BCHW)
-    #     if len(original_shape) == 5:  # BTCHW format
-    #         b, t, c, h, w = original_shape
-    #         reshaped_noise = warped_noise.reshape(b*t, c, h, w)
-    #     else:
-    #         reshaped_noise = warped_noise
-        
-    #     # 1. Create random noise of the same shape
-    #     random_noise = torch.randn_like(reshaped_noise)
-    #     # random_noise = torch.randn_like(upscaled_noise)
-        
-
-
-    #     # 2. Upscale the original noise to "pixel space"
-    #     upscaled_noise = F.interpolate(
-    #         reshaped_noise,
-    #         scale_factor=upscale_factor,
-    #         mode='bilinear'
-    #     )
-
-    #     # 3. Upscale the random noise to "pixel space"
-    #     upscaled_random_noise = F.interpolate(
-    #         random_noise,
-    #         scale_factor=upscale_factor,
-    #         mode='bilinear'
-    #     )
-
-    #     print(f"original alpha_map shape: {alpha_map.shape}")
-
-    #     alpha_map_resized = alpha_map
-    #     # 3. Resize alpha_map to match upscaled noise spatial dimensions
-    #     # if alpha_map.shape[-2:] != upscaled_noise.shape[-2:]:
-    #     #     # Ensure alpha_map has proper batch/channel dims for interpolation
-    #     #     if len(alpha_map.shape) < len(upscaled_noise.shape):
-    #     #         alpha_map = alpha_map.unsqueeze(1)  # Add channel dim if needed
-                
-    #     #     alpha_map_resized = F.interpolate(
-    #     #         alpha_map,
-    #     #         size=upscaled_noise.shape[-2:],
-    #     #         mode='bilinear'
-    #     #     )
-    #     # else:
-    #     #     print("did not resize alpha_map")
-    #     #     alpha_map_resized = alpha_map
-            
-    #     # Ensure alpha map has proper shape for broadcasting
-
-
-    #     # while len(alpha_map_resized.shape) < len(upscaled_noise.shape):
-    #     #     alpha_map_resized = alpha_map_resized.unsqueeze(1)
-        
-    #     # for the experiment
-    #     while len(alpha_map_resized.shape) < len(reshaped_noise.shape):
-    #         alpha_map_resized = alpha_map_resized.unsqueeze(1)
-
-    #     print(f"alpha_map_resized shape: {alpha_map_resized.shape}")
-    #     print(f"upscaled_noise shape: {upscaled_noise.shape}")
-        
-    #     # 4. Apply the degradation by blending original and random noise
-
-    #     # using the original noises for now, for an experiment
-    #     degraded_noise = self._blend_noise_with_alpha_tensor(reshaped_noise, random_noise, alpha_map_resized)
-        
-    #     # 5. Downscale back to original resolution
-    #     downscaled_noise = F.interpolate(
-    #         degraded_noise,
-    #         size=reshaped_noise.shape[-2:],
-    #         mode='area'
-    #     )
-        
-    #     # 6. Reshape back to original format if needed
-    #     if len(original_shape) == 5:  # BTCHW format
-    #         downscaled_noise = downscaled_noise.reshape(original_shape)
-        
-    #     return downscaled_noise
 
     def _apply_spatial_degradation_to_warped_noise(self, warped_noise, alpha_map, upscale_factor=8):
         """
@@ -416,7 +322,7 @@ class WarpedNoiseBase:
 
         downtemp_noise_tensor = downtemp_noise_tensor.to(device) if output_device == "GPU" else downtemp_noise_tensor.cpu()
 
-        return {"samples":downtemp_noise_tensor}, vis_tensor_noises, vis_tensor_flows
+        return {"samples":downtemp_noise_tensor}, vis_tensor_noises, vis_tensor_flows, pixel_alpha_map
 
     @staticmethod
     def _downscale_noise(noise, downscale_factor):
@@ -528,8 +434,8 @@ class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
                 "seed": ("INT", {"default": 123,"min": 0, "max": 0xffffffffffffffff, "step": 1}),
             },
         }
-    RETURN_TYPES = ("LATENT", "IMAGE",)
-    RETURN_NAMES = ("noise", "visualization",)
+    RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE")
+    RETURN_NAMES = ("noise", "visualization", "pixel_alpha_map")
 
     def warp(self, images, binary_images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
         latent_frames = (num_frames - 1) // 4 + 1
@@ -549,7 +455,7 @@ class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
             sigmas=sigmas,
             return_flows=False
         )
-
+    
 
 NODE_CLASS_MAPPINGS = {
     "GetWarpedNoiseFromVideoVariableDegradation": GetWarpedNoiseFromVideoVariableDegradation,
@@ -563,3 +469,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "GetWarpedNoiseFromVideoCogVideoXVariableDegradation": "GetWarpedNoiseFromVideoCogVideoXVariableDegradation",
     "GetWarpedNoiseFromVideoHunyuanVariableDegradation": "GetWarpedNoiseFromVideoHunyuanVariableDegradation",
     }
+
+
