@@ -115,7 +115,7 @@ def optical_flow_to_image(dx, dy, *, mode='saturation', sensitivity=None):
 
 class WarpedNoiseBase:
     RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("noise", "visualization", "optical_flows", "pixel_alpha_map")
+    RETURN_NAMES = ("noise", "visualization", "optical_flows", "alpha_map_visualization")
     FUNCTION = "warp"
     CATEGORY = "NoiseWarpVariableDegradation"
 
@@ -322,7 +322,17 @@ class WarpedNoiseBase:
 
         downtemp_noise_tensor = downtemp_noise_tensor.to(device) if output_device == "GPU" else downtemp_noise_tensor.cpu()
 
-        return {"samples":downtemp_noise_tensor}, vis_tensor_noises, vis_tensor_flows, pixel_alpha_map
+        # Convert pixel_alpha_map to visualization-friendly format (BHWC)
+        vis_alpha_map = pixel_alpha_map.squeeze(1).unsqueeze(-1)  # Convert from BCHW to BHW1
+        vis_alpha_map = vis_alpha_map.cpu().float()
+        
+        # Ensure we have the right number of frames to match other visualizations
+        target_len = images.shape[0]
+        if vis_alpha_map.shape[0] != target_len:
+            repeat_count = (target_len + vis_alpha_map.shape[0] - 1) // vis_alpha_map.shape[0]
+            vis_alpha_map = vis_alpha_map.repeat_interleave(repeat_count, dim=0)[:target_len]
+
+        return {"samples":downtemp_noise_tensor}, vis_tensor_noises, vis_tensor_flows, vis_alpha_map
 
     @staticmethod
     def _downscale_noise(noise, downscale_factor):
@@ -435,7 +445,7 @@ class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
             },
         }
     RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE")
-    RETURN_NAMES = ("noise", "visualization", "pixel_alpha_map")
+    RETURN_NAMES = ("noise", "visualization", "alpha_map_visualization")
 
     def warp(self, images, binary_images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None):
         latent_frames = (num_frames - 1) // 4 + 1
