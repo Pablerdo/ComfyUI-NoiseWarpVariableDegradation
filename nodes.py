@@ -141,8 +141,13 @@ class WarpedNoiseBase:
         prev_video_frame = video_frames[0]
 
         noise = warper.noise
-        down_noise = self._downscale_noise(noise, downscale_factor)
-        numpy_noise = down_noise.cpu().numpy().astype(np.float16)
+
+        print(f"primordial noise shape: {noise.shape}")
+        # TODO
+        # Running experiment to put off downscaling until after the degradation, towards the goal of being able to apply pixel-level degradation.
+        # down_noise = self._downscale_noise(noise, downscale_factor)
+        # numpy_noise = down_noise.cpu().numpy().astype(np.float16)
+        numpy_noise = noise.cpu().numpy().astype(np.float16)
 
         numpy_noises = [numpy_noise]
         rgb_flows = []
@@ -156,8 +161,9 @@ class WarpedNoiseBase:
                 rgb_flows.append(flow_rgb)
             noise = warper(dx, dy).noise
             prev_video_frame = video_frame
-            down_noise = self._downscale_noise(noise, downscale_factor)
-            numpy_noises.append(down_noise.cpu().numpy().astype(np.float16))
+            # down_noise = self._downscale_noise(noise, downscale_factor)
+            # numpy_noises.append(down_noise.cpu().numpy().astype(np.float16))
+            numpy_noises.append(noise.cpu().numpy().astype(np.float16))
             pbar.update(1)
 
         return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
@@ -220,12 +226,12 @@ class WarpedNoiseBase:
         if len(alpha_map.shape) < 4:  # If alpha_map doesn't have a channel dimension
             downscaled_alpha = alpha_map.unsqueeze(1)  # Add channel dim if needed
             
-        # Downscale to match noise spatial dimensions
-        downscaled_alpha = F.interpolate(
-            downscaled_alpha,
-            size=reshaped_noise.shape[-2:],  # Match height and width of noise
-            mode='nearest' 
-        )
+        # # Downscale to match noise spatial dimensions
+        # downscaled_alpha = F.interpolate(
+        #     downscaled_alpha,
+        #     size=reshaped_noise.shape[-2:],  # Match height and width of noise
+        #     mode='nearest' 
+        # )
 
         print(f"downscaled_alpha shape: {downscaled_alpha.shape}")
         print(f"downscaled_alpha min: {downscaled_alpha.min().item()}, max: {downscaled_alpha.max().item()}, mean: {downscaled_alpha.mean().item()}")
