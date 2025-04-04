@@ -212,6 +212,7 @@ class WarpedNoiseBase:
         
         print(f"warped_noise shape: {reshaped_noise.shape}")
         print(f"original alpha_map shape: {alpha_map.shape}")
+        print(f"alpha_map min: {alpha_map.min().item()}, max: {alpha_map.max().item()}, mean: {alpha_map.mean().item()}")
         
         # 1. Downscale the alpha map to match the noise dimensions
         # Ensure alpha_map has proper batch/channel dims for interpolation
@@ -223,8 +224,12 @@ class WarpedNoiseBase:
         downscaled_alpha = F.interpolate(
             downscaled_alpha,
             size=reshaped_noise.shape[-2:],  # Match height and width of noise
-            mode='area'  # Area interpolation works best for downscaling
+            mode='nearest' 
         )
+
+        print(f"downscaled_alpha shape: {downscaled_alpha.shape}")
+        print(f"downscaled_alpha min: {downscaled_alpha.min().item()}, max: {downscaled_alpha.max().item()}, mean: {downscaled_alpha.mean().item()}")
+        print(f"downscaled_alpha: {downscaled_alpha[0]}")
         
         # 2. Create random noise at the same resolution as the warped noise
         random_noise = torch.randn_like(reshaped_noise)
@@ -283,10 +288,10 @@ class WarpedNoiseBase:
         print(f"pixel_alpha_map shape: {pixel_alpha_map.shape}")
         print(f"pixel_alpha_map: {pixel_alpha_map[0]}")
 
-        noise_tensor = self._apply_spatial_degradation_to_warped_noise(noise_tensor, pixel_alpha_map)
-
+        blended_noise_tensor = self._apply_spatial_degradation_to_warped_noise(noise_tensor, pixel_alpha_map)
+        
         downtemp_noise_tensor = get_downtemp_noise(
-            noise_tensor,
+            blended_noise_tensor,
             noise_downtemp_interp=noise_downtemp_interp,
             interp_to=target_latent_count,
         )
