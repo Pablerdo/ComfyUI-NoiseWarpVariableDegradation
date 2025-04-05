@@ -237,19 +237,21 @@ class WarpedNoiseBase:
         print(f"downscaled_alpha min: {downscaled_alpha.min().item()}, max: {downscaled_alpha.max().item()}, mean: {downscaled_alpha.mean().item()}")
         print(f"downscaled_alpha: {downscaled_alpha[0]}")
         
-        # 2. Create random noise at the same resolution as the warped noise
+        # Create random noise at the same resolution as the warped noise
         random_noise = torch.randn_like(reshaped_noise)
         
-        # 3. Ensure alpha map has proper shape for broadcasting
+        # Ensure alpha map has proper shape for broadcasting
+        # For a noise tensor of shape [B, C, H, W], we want alpha_map to be [B, 1, H, W]
+        # to ensure per-pixel but same degradation across all C channels
         while len(downscaled_alpha.shape) < len(reshaped_noise.shape):
             downscaled_alpha = downscaled_alpha.unsqueeze(1)
         
-        print(f"downscaled_alpha shape: {downscaled_alpha.shape}")
+        print(f"broadcasting alpha_map shape: {downscaled_alpha.shape}")
         
-        # 4. Apply the degradation by blending original and random noise using variance-preserving blend
+        # Apply the degradation by blending original and random noise using variance-preserving blend
         degraded_noise = self._blend_noise_with_alpha_tensor(reshaped_noise, random_noise, downscaled_alpha)
         
-        # 5. Reshape back to original format if needed
+        # Reshape back to original format if needed
         if len(original_shape) == 5:  # BTCHW format
             degraded_noise = degraded_noise.reshape(original_shape)
         
@@ -296,8 +298,10 @@ class WarpedNoiseBase:
 
         blended_noise_tensor = self._apply_spatial_degradation_to_warped_noise(noise_tensor, pixel_alpha_map)
         
+        down_blended_noise = self._downscale_noise(blended_noise_tensor, downscale_factor)
+
         downtemp_noise_tensor = get_downtemp_noise(
-            blended_noise_tensor,
+            down_blended_noise,
             noise_downtemp_interp=noise_downtemp_interp,
             interp_to=target_latent_count,
         )
