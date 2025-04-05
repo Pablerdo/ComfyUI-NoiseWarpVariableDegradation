@@ -159,7 +159,11 @@ class WarpedNoiseBase:
             translate_dx, translate_dy = raft_model(prev_video_frame, video_frame)
             print(f"video_frame shape: {video_frame.shape}")
             if abs(zoom_speed) > 0.0:
-                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[1], video_frame.shape[2], index, zoom_speed)
+                # Get the device from translate_dx
+                device = translate_dx.device
+
+                # Call with device parameter
+                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[0], video_frame.shape[1], index, zoom_speed, device)
                 dx = translate_dx + zoom_dx
                 dy = translate_dy + zoom_dy
             else:

@@ -147,9 +147,9 @@ def calculate_wave_pattern(h, w, frame):
     
     return dx, dy
 
-def starfield_zoom(h, w, frame, zoom_speed=0.1):
+def starfield_zoom(h, w, frame, zoom_speed=0.1, device="cuda"):
     # Create a grid of coordinates
-    y, x = torch.meshgrid(torch.arange(h), torch.arange(w))
+    y, x = torch.meshgrid(torch.arange(h, device=device), torch.arange(w, device=device))
     
     # Calculate the distance from the center of the image
     center_x, center_y = w // 2, h // 2
