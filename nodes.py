@@ -157,8 +157,9 @@ class WarpedNoiseBase:
 
         for index, video_frame in enumerate(tqdm(video_frames[1:], desc="Calculating noise warp")):
             translate_dx, translate_dy = raft_model(prev_video_frame, video_frame)
+            print(f"video_frame shape: {video_frame.shape}")
             if abs(zoom_speed) > 0.0:
-                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[2], video_frame.shape[3], index, zoom_speed)
+                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[1], video_frame.shape[2], index, zoom_speed)
                 dx = translate_dx + zoom_dx
                 dy = translate_dy + zoom_dy
             else:
@@ -305,9 +306,6 @@ class WarpedNoiseBase:
         print(f"pixel_alpha_map: {pixel_alpha_map[0]}")
 
         blended_noise_tensor = self._apply_spatial_degradation_to_warped_noise(noise_tensor, pixel_alpha_map)
-        
-        # if zoom is not None:
-        #     blended_noise_tensor = starfield_zoom(blended_noise_tensor.shape[2], blended_noise_tensor.shape[3], 0, zoom_speed=zoom)
 
         down_blended_noise = self._downscale_noise(blended_noise_tensor, downscale_factor)
 
