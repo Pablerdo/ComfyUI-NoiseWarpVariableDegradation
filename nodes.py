@@ -249,7 +249,7 @@ class WarpedNoiseBase:
         print(f"broadcasting alpha_map shape: {downscaled_alpha.shape}")
         
         # Apply the degradation by blending original and random noise using variance-preserving blend
-        degraded_noise = self._blend_noise_with_alpha_tensor(background_noise=reshaped_noise, foreground_noise=random_noise, alpha_map=downscaled_alpha)
+        degraded_noise = self._blend_noise_with_alpha_tensor(noise_background=reshaped_noise, noise_foreground=random_noise, alpha_map=downscaled_alpha)
         
         # Reshape back to original format if needed
         if len(original_shape) == 5:  # BTCHW format
