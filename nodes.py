@@ -6,11 +6,12 @@ import torch.nn.functional as F
 
 import comfy.model_management as mm
 from comfy.utils import ProgressBar
-
+import json
 script_directory = os.path.dirname(os.path.abspath(__file__))
 
-from .noisewarp.noise_warp import NoiseWarper, double_mask_border_region, compute_alpha_map_2levels
+from .noisewarp.noise_warp import NoiseWarper, double_mask_border_region, compute_alpha_map_2levels, starfield_zoom
 from .noisewarp.raft import RaftOpticalFlow
+
 
 def get_downtemp_noise(noise, noise_downtemp_interp, interp_to=13):   
     if noise_downtemp_interp == 'nearest':
@@ -119,7 +120,7 @@ class WarpedNoiseBase:
     FUNCTION = "warp"
     CATEGORY = "NoiseWarpVariableDegradation"
 
-    def _process_video_frames(self, images, noise_channels, device, downscale_factor, resize_flow, return_flows=True):
+    def _process_video_frames(self, images, noise_channels, device, downscale_factor, resize_flow, zoom_speed, return_flows=True):
         B, H, W, C = images.shape
         video_frames = images.permute(0, 3, 1, 2)
 
@@ -135,9 +136,9 @@ class WarpedNoiseBase:
         raft_model = RaftOpticalFlow(device, "large")
         raft_model.model.to(device)
 
-        return self._compute_warped_noise(video_frames, warper, raft_model, downscale_factor, return_flows=return_flows)
+        return self._compute_warped_noise(video_frames, warper, raft_model, downscale_factor, return_flows=return_flows, zoom_speed=zoom_speed)
 
-    def _compute_warped_noise(self, video_frames, warper, raft_model, downscale_factor, return_flows=False):
+    def _compute_warped_noise(self, video_frames, warper, raft_model, downscale_factor, zoom_speed, return_flows=False,):
         prev_video_frame = video_frames[0]
 
         noise = warper.noise
@@ -154,8 +155,15 @@ class WarpedNoiseBase:
 
         pbar = ProgressBar(len(video_frames) - 1)
 
-        for video_frame in tqdm(video_frames[1:], desc="Calculating noise warp"):
-            dx, dy = raft_model(prev_video_frame, video_frame)
+        for index, video_frame in enumerate(tqdm(video_frames[1:], desc="Calculating noise warp")):
+            translate_dx, translate_dy = raft_model(prev_video_frame, video_frame)
+            if abs(zoom_speed) > 0.0:
+                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[2], video_frame.shape[3], index, zoom_speed)
+                dx = translate_dx + zoom_dx
+                dy = translate_dy + zoom_dy
+            else:
+                dx = translate_dx
+                dy = translate_dy
             if return_flows:
                 flow_rgb = optical_flow_to_image(dx.cpu().numpy(), dy.cpu().numpy(), mode='saturation', sensitivity=1)
                 rgb_flows.append(flow_rgb)
@@ -258,7 +266,7 @@ class WarpedNoiseBase:
         return degraded_noise
 
     def warp(self, images, masks, noise_channels, noise_downtemp_interp, degradation, boundary_degradation, second_boundary_degradation,
-             target_latent_count, latent_shape, spatial_downscale_factor, seed, boundary_px1=10, boundary_px2=20, model=None, sigmas=None, return_flows=True, output_device="CPU"):
+             target_latent_count, latent_shape, spatial_downscale_factor, seed, boundary_px1=10, boundary_px2=20, model=None, sigmas=None, return_flows=True, output_device="CPU", zoom_speed=0.0):
         
         device = mm.get_torch_device()
         
@@ -269,7 +277,7 @@ class WarpedNoiseBase:
         downscale_factor = round(resize_frames * resize_flow) * spatial_downscale_factor
 
         numpy_noises, rgb_flows = self._process_video_frames(
-            images, noise_channels, device, downscale_factor, resize_flow, return_flows=return_flows
+            images, noise_channels, device, downscale_factor, resize_flow, return_flows=return_flows, zoom_speed=zoom_speed
         )
 
         # Process noise tensor
@@ -298,6 +306,9 @@ class WarpedNoiseBase:
 
         blended_noise_tensor = self._apply_spatial_degradation_to_warped_noise(noise_tensor, pixel_alpha_map)
         
+        # if zoom is not None:
+        #     blended_noise_tensor = starfield_zoom(blended_noise_tensor.shape[2], blended_noise_tensor.shape[3], 0, zoom_speed=zoom)
+
         down_blended_noise = self._downscale_noise(blended_noise_tensor, downscale_factor)
 
         downtemp_noise_tensor = get_downtemp_noise(
@@ -481,12 +492,21 @@ class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
                 "boundary_px1": ("INT", {"default": 10, "min": 0, "max": 1000, "step": 1, "tooltip": "First boundary margin size"}),
                 "boundary_px2": ("INT", {"default": 20, "min": 0, "max": 1000, "step": 1, "tooltip": "Second boundary margin size"}),
             },
+            "optional": {
+                "camera_motion": ("STRING", {"default": "none", "tooltip": "Camera motion object to use for the noise warp. We will mainly care abput the zoom inside the object."}),
+            }
         }
     RETURN_TYPES = ("LATENT", "IMAGE", "IMAGE", "IMAGE")
     RETURN_NAMES = ("noise", "visualization", "alpha_map_visualization", "optical_flows")
 
-    def warp(self, images, binary_images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, boundary_px1=10, boundary_px2=20):
+    def warp(self, images, binary_images, degradation, boundary_degradation, second_boundary_degradation, seed, noise_downtemp_interp, num_frames, model=None, sigmas=None, boundary_px1=10, boundary_px2=20, camera_motion=None):
         latent_frames = (num_frames - 1) // 4 + 1
+        zoom_speed = 0.0
+        if camera_motion != "none":
+            camera_motion = json.loads(camera_motion)
+            print(f"camera_motion: {camera_motion}")
+            zoom_speed = camera_motion["dolly"]
+
         return super().warp(
             images=images,
             masks=binary_images,
@@ -503,7 +523,8 @@ class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
             sigmas=sigmas,
             return_flows=False,
             boundary_px1=boundary_px1,
-            boundary_px2=boundary_px2
+            boundary_px2=boundary_px2,
+            zoom_speed=zoom_speed
         )
     
 
