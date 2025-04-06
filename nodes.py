@@ -163,7 +163,7 @@ class WarpedNoiseBase:
                 device = translate_dx.device
 
                 # Call with device parameter
-                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[0], video_frame.shape[1], index, zoom_speed, device)
+                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[1], video_frame.shape[2], index, zoom_speed, device)
                 dx = translate_dx + zoom_dx
                 dy = translate_dy + zoom_dy
             else:
