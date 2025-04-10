@@ -156,19 +156,9 @@ class WarpedNoiseBase:
         pbar = ProgressBar(len(video_frames) - 1)
 
         for index, video_frame in enumerate(tqdm(video_frames[1:], desc="Calculating noise warp")):
-            translate_dx, translate_dy = raft_model(prev_video_frame, video_frame)
+            dx, dy = raft_model(prev_video_frame, video_frame)
             print(f"video_frame shape: {video_frame.shape}")
-            if abs(zoom_speed) > 0.0:
-                # Get the device from translate_dx
-                device = translate_dx.device
 
-                # Call with device parameter
-                zoom_dx, zoom_dy = starfield_zoom(video_frame.shape[1], video_frame.shape[2], index, zoom_speed, device)
-                dx = translate_dx + zoom_dx
-                dy = translate_dy + zoom_dy
-            else:
-                dx = translate_dx
-                dy = translate_dy
             if return_flows:
                 flow_rgb = optical_flow_to_image(dx.cpu().numpy(), dy.cpu().numpy(), mode='saturation', sensitivity=1)
                 rgb_flows.append(flow_rgb)
@@ -181,6 +171,16 @@ class WarpedNoiseBase:
 
         return np.stack(numpy_noises), np.stack(rgb_flows) if return_flows else None
     
+    def _apply_zoom_to_noise(self, warper, noise, zoom_speed, device):
+        # Calculate starfield zoom displacement vectors
+        zoom_dx, zoom_dy = starfield_zoom(noise.shape[2], noise.shape[3], 0, zoom_speed, device)
+        
+        # Apply the warping using the displacement vectors
+        warper(zoom_dx, zoom_dy)
+        
+        # Return the warped noise
+        return warper.noise
+
     def _blend_noise_with_alpha_tensor(self, noise_background, noise_foreground, alpha_map):
         """
         Apply variance-preserving noise blending with a spatially varying alpha map.
@@ -310,6 +310,30 @@ class WarpedNoiseBase:
         print(f"pixel_alpha_map: {pixel_alpha_map[0]}")
 
         blended_noise_tensor = self._apply_spatial_degradation_to_warped_noise(noise_tensor, pixel_alpha_map)
+
+        print(f"blended_noise_tensor shape: {blended_noise_tensor.shape}")
+        print(f"blended_noise_tensor: {blended_noise_tensor[0]}")
+
+        if abs(zoom_speed) > 0.0:
+            # Implement noise warp existing noise, namely blended_noise_tensor.
+            # Create a NoiseWarper instance with the appropriate parameters
+            zoom_warper = NoiseWarper(
+                c=blended_noise_tensor.shape[1],  # Number of channels
+                h=blended_noise_tensor.shape[2],  # Height
+                w=blended_noise_tensor.shape[3],  # Width
+                device=device,
+                dtype=blended_noise_tensor.dtype,
+                scale_factor=1,
+                post_noise_alpha=0,
+                progressive_noise_alpha=0
+            )
+            
+            # Initialize the warper's state with our existing noise
+            noise_tensor_scaled = blended_noise_tensor
+            zoom_warper._state = zoom_warper._noise_to_state(noise_tensor_scaled)
+            
+            # Apply the zoom effect
+            blended_noise_tensor = self._apply_zoom_to_noise(zoom_warper, blended_noise_tensor, zoom_speed, device)
 
         down_blended_noise = self._downscale_noise(blended_noise_tensor, downscale_factor)
 
