@@ -270,6 +270,49 @@ class WarpedNoiseBase:
         
         return degraded_noise
 
+    def _process_zoom_effect(self, blended_noise_tensor, zoom_speed, device):
+        # Handle each frame in the batch separately to avoid dimensionality issues
+        b, c, h, w = blended_noise_tensor.shape
+        result_frames = []
+        
+        for i in range(b):
+            # Extract a single frame noise (CHW format)
+            frame_noise = blended_noise_tensor[i]
+            
+            # Create a warper for this frame
+            frame_warper = NoiseWarper(
+                c=c,
+                h=h,
+                w=w,
+                device=device,
+                dtype=blended_noise_tensor.dtype,
+                scale_factor=1,
+                post_noise_alpha=0,
+                progressive_noise_alpha=0
+            )
+            
+            # Initialize the warper state with this frame's noise
+            frame_warper._state = frame_warper._noise_to_state(frame_noise)
+            
+            # Calculate zoom displacement vectors for this frame
+            zoom_dx, zoom_dy = starfield_zoom(h, w, 0, zoom_speed, device)
+            
+            # Apply the warping
+            frame_warper(zoom_dx, zoom_dy)
+            
+            # Get the warped noise for this frame
+            warped_frame = frame_warper.noise
+            
+            # Add to results
+            result_frames.append(warped_frame)
+        
+        # Stack results back into batch dimension
+        return torch.stack(result_frames)
+        
+        # Note: the calling code will handle creating another warper, but that's not
+        # needed since we've already processed each frame. We'll let that continue
+        # for compatibility but our result is already fully processed.
+
     def warp(self, images, masks, noise_channels, noise_downtemp_interp, degradation, boundary_degradation, second_boundary_degradation,
              target_latent_count, latent_shape, spatial_downscale_factor, seed, boundary_px1=10, boundary_px2=20, model=None, sigmas=None, return_flows=True, output_device="CPU", zoom_speed=0.0):
         
@@ -315,25 +358,7 @@ class WarpedNoiseBase:
         print(f"blended_noise_tensor: {blended_noise_tensor[0]}")
 
         if abs(zoom_speed) > 0.0:
-            # Implement noise warp existing noise, namely blended_noise_tensor.
-            # Create a NoiseWarper instance with the appropriate parameters
-            zoom_warper = NoiseWarper(
-                c=blended_noise_tensor.shape[1],  # Number of channels
-                h=blended_noise_tensor.shape[2],  # Height
-                w=blended_noise_tensor.shape[3],  # Width
-                device=device,
-                dtype=blended_noise_tensor.dtype,
-                scale_factor=1,
-                post_noise_alpha=0,
-                progressive_noise_alpha=0
-            )
-            
-            # Initialize the warper's state with our existing noise
-            noise_tensor_scaled = blended_noise_tensor
-            zoom_warper._state = zoom_warper._noise_to_state(noise_tensor_scaled)
-            
-            # Apply the zoom effect
-            blended_noise_tensor = self._apply_zoom_to_noise(zoom_warper, blended_noise_tensor, zoom_speed, device)
+            blended_noise_tensor = self._process_zoom_effect(blended_noise_tensor, zoom_speed, device)
 
         down_blended_noise = self._downscale_noise(blended_noise_tensor, downscale_factor)
 
