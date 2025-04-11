@@ -276,8 +276,8 @@ class WarpedNoiseBase:
         result_frames = []
         
         for i in range(b):
-            # Extract a single frame noise (CHW format)
-            frame_noise = blended_noise_tensor[i]
+            # Extract a single frame noise (CHW format) and ensure it's on the correct device
+            frame_noise = blended_noise_tensor[i].to(device)
             
             # Create a warper for this frame
             frame_warper = NoiseWarper(
@@ -285,17 +285,19 @@ class WarpedNoiseBase:
                 h=h,
                 w=w,
                 device=device,
-                dtype=blended_noise_tensor.dtype,
+                dtype=frame_noise.dtype,
                 scale_factor=1,
                 post_noise_alpha=0,
-                progressive_noise_alpha=0
+                progressive_noise_alpha=0,
+                default_noise=frame_noise
             )
-            
-            # Initialize the warper state with this frame's noise
-            frame_warper._state = frame_warper._noise_to_state(frame_noise)
             
             # Calculate zoom displacement vectors for this frame
             zoom_dx, zoom_dy = starfield_zoom(h, w, 0, zoom_speed, device)
+            
+            # Explicitly ensure displacement vectors are on the same device as the frame_noise
+            zoom_dx = zoom_dx.to(device)
+            zoom_dy = zoom_dy.to(device)
             
             # Apply the warping
             frame_warper(zoom_dx, zoom_dy)

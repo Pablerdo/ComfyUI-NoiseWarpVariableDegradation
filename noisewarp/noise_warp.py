@@ -516,6 +516,7 @@ class NoiseWarper:
         post_noise_alpha = 0,
         progressive_noise_alpha = 0,
         warp_kwargs=dict(),
+        default_noise=None
     ):
 
         #Some non-exhaustive input assertions
@@ -536,15 +537,18 @@ class NoiseWarper:
         self.warp_kwargs=warp_kwargs
 
         #Initialize the state
-        self._state = self._noise_to_state(
-            noise=torch.randn(
-                c,
-                h * scale_factor,
-                w * scale_factor,
-                dtype=dtype,
-                device=device,
+        if default_noise is None:
+            self._state = self._noise_to_state(
+                noise=torch.randn(
+                    c,
+                    h * scale_factor,
+                    w * scale_factor,
+                    dtype=dtype,
+                    device=device,
+                )
             )
-        )
+        else:
+            self._state = self._noise_to_state(noise=default_noise)
 
     @property
     def noise(self):
