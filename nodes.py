@@ -274,7 +274,8 @@ class WarpedNoiseBase:
         # Handle each frame in the batch separately to avoid dimensionality issues
 
         original_shape = blended_noise_tensor.shape
-        
+        print(f"original_shape: {original_shape}")
+
         # Reshape if needed for interpolation (e.g., from BTCHW to BCHW)
         if len(original_shape) == 5:  # BTCHW format
             b, t, c, h, w = original_shape
@@ -313,14 +314,14 @@ class WarpedNoiseBase:
             zoom_dy = zoom_dy.to(device)
             
             # Apply the warping
-            frame_warper(zoom_dx, zoom_dy)
+            warped_frame = frame_warper(zoom_dx, zoom_dy).noise
             
-            # Get the warped noise for this frame
-            warped_frame = frame_warper.noise
-            
+            print(f"warped_frame shape: {warped_frame.shape}")
+
             # Add to results
             result_frames.append(warped_frame)
         
+        print(f"result_frames shape: {torch.stack(result_frames).shape}")
         # Reshape back to original format if needed
         if len(original_shape) == 5:  # BTCHW format
             zoomed_noise = torch.stack(result_frames).reshape(original_shape)
