@@ -317,16 +317,23 @@ class WarpedNoiseBase:
             warped_frame = frame_warper(zoom_dx, zoom_dy).noise
             
             print(f"warped_frame shape: {warped_frame.shape}")
+            
+            # Remove batch dimension if it exists (warped_frame is [1, C, H, W])
+            if warped_frame.ndim == 4 and warped_frame.shape[0] == 1:
+                warped_frame = warped_frame.squeeze(0)  # Change from [1, C, H, W] to [C, H, W]
+                
+            print(f"processed warped_frame shape: {warped_frame.shape}")
 
             # Add to results
             result_frames.append(warped_frame)
         
-        print(f"result_frames shape: {torch.stack(result_frames).shape}")
+        stacked_noise_frames = torch.stack(result_frames)
+        print(f"stacked_noise_frames shape: {stacked_noise_frames.shape}")
         # Reshape back to original format if needed
         if len(original_shape) == 5:  # BTCHW format
-            zoomed_noise = torch.stack(result_frames).reshape(original_shape)
+            zoomed_noise = stacked_noise_frames.reshape(original_shape)
         else:
-            zoomed_noise = torch.stack(result_frames)
+            zoomed_noise = stacked_noise_frames
         
         return zoomed_noise
         # Note: the calling code will handle creating another warper, but that's not
