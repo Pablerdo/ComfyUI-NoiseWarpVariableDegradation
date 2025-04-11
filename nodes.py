@@ -272,7 +272,20 @@ class WarpedNoiseBase:
 
     def _process_zoom_effect(self, blended_noise_tensor, zoom_speed, device):
         # Handle each frame in the batch separately to avoid dimensionality issues
-        b, c, h, w = blended_noise_tensor.shape
+
+        original_shape = blended_noise_tensor.shape
+        
+        # Reshape if needed for interpolation (e.g., from BTCHW to BCHW)
+        if len(original_shape) == 5:  # BTCHW format
+            b, t, c, h, w = original_shape
+            reshaped_noise = blended_noise_tensor.reshape(b*t, c, h, w)
+        elif len(original_shape) == 4:
+            b, c, h, w = original_shape
+            reshaped_noise = blended_noise_tensor
+        else:
+            raise ValueError(f"Invalid shape: {original_shape}")
+
+        print(f"reshaped_noise shape: {reshaped_noise.shape}")
         result_frames = []
         
         for i in range(b):
@@ -308,9 +321,13 @@ class WarpedNoiseBase:
             # Add to results
             result_frames.append(warped_frame)
         
-        # Stack results back into batch dimension
-        return torch.stack(result_frames)
+        # Reshape back to original format if needed
+        if len(original_shape) == 5:  # BTCHW format
+            zoomed_noise = torch.stack(result_frames).reshape(original_shape)
+        else:
+            zoomed_noise = torch.stack(result_frames)
         
+        return zoomed_noise
         # Note: the calling code will handle creating another warper, but that's not
         # needed since we've already processed each frame. We'll let that continue
         # for compatibility but our result is already fully processed.
