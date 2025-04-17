@@ -721,7 +721,7 @@ def compute_alpha_map_2levels(mask: torch.Tensor,
     # Now, the original code has a a zeros-filled alpha map, that does NOT have noise that is different in each frame, outside of the mask.
 
     # TODO: find out what the difference is, and why the original code has a zeros-filled alpha map.
-    alpha_map = torch.zeros((B, 1, H, W), device=mask.device, dtype=torch.float32)
+    alpha_map = torch.ones((B, 1, H, W), device=mask.device, dtype=torch.float32)
     
     # Create scalar tensors for the alpha values
     boundary_alpha_tensor = torch.tensor(boundary_alpha, device=mask.device, dtype=torch.float32)

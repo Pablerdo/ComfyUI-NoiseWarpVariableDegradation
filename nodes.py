@@ -384,8 +384,8 @@ class WarpedNoiseBase:
         print(f"blended_noise_tensor shape: {blended_noise_tensor.shape}")
         print(f"blended_noise_tensor: {blended_noise_tensor[0]}")
 
-        if abs(zoom_speed) > 0.0:
-            blended_noise_tensor = self._process_zoom_effect(blended_noise_tensor, zoom_speed, device)
+        # if abs(zoom_speed) > 0.0:
+        #     blended_noise_tensor = self._process_zoom_effect(blended_noise_tensor, zoom_speed, device)
 
         down_blended_noise = self._downscale_noise(blended_noise_tensor, downscale_factor)
 
