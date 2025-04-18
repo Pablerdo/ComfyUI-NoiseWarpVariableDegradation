@@ -220,7 +220,7 @@ class WarpedNoiseBase:
         down_noise = F.interpolate(noise, scale_factor=1/downscale_factor, mode='area')
         return down_noise * downscale_factor
 
-class GetWarpedNoiseFromVideo(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -241,7 +241,7 @@ class GetWarpedNoiseFromVideo(WarpedNoiseBase):
             },
         }
 
-class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoAnimateDiffVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -273,7 +273,7 @@ class GetWarpedNoiseFromVideoAnimateDiff(WarpedNoiseBase):
             output_device=output_device
         )
 
-class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoCogVideoXVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
        return {
@@ -303,7 +303,7 @@ class GetWarpedNoiseFromVideoCogVideoX(WarpedNoiseBase):
             output_device=output_device
         )
     
-class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
+class GetWarpedNoiseFromVideoHunyuanVariableDegradation(WarpedNoiseBase):
     @classmethod
     def INPUT_TYPES(s):
        return {
@@ -336,14 +336,14 @@ class GetWarpedNoiseFromVideoHunyuan(WarpedNoiseBase):
 
 
 NODE_CLASS_MAPPINGS = {
-    "GetWarpedNoiseFromVideo": GetWarpedNoiseFromVideo,
-    "GetWarpedNoiseFromVideoAnimateDiff": GetWarpedNoiseFromVideoAnimateDiff,
-    "GetWarpedNoiseFromVideoCogVideoX": GetWarpedNoiseFromVideoCogVideoX,
-    "GetWarpedNoiseFromVideoHunyuan": GetWarpedNoiseFromVideoHunyuan,
+    "GetWarpedNoiseFromVideoVariableDegradation": GetWarpedNoiseFromVideoVariableDegradation,
+    "GetWarpedNoiseFromVideoAnimateDiffVariableDegradation": GetWarpedNoiseFromVideoAnimateDiffVariableDegradation,
+    "GetWarpedNoiseFromVideoCogVideoXVariableDegradation": GetWarpedNoiseFromVideoCogVideoXVariableDegradation,
+    "GetWarpedNoiseFromVideoHunyuanVariableDegradation": GetWarpedNoiseFromVideoHunyuanVariableDegradation,
     }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "GetWarpedNoiseFromVideo": "GetWarpedNoiseFromVideo",
-    "GetWarpedNoiseFromVideoAnimateDiff": "GetWarpedNoiseFromVideoAnimateDiff",
-    "GetWarpedNoiseFromVideoCogVideoX": "GetWarpedNoiseFromVideoCogVideoX",
-    "GetWarpedNoiseFromVideoHunyuan": "GetWarpedNoiseFromVideoHunyuan",
+    "GetWarpedNoiseFromVideoVariableDegradation": "GetWarpedNoiseFromVideoVariableDegradation",
+    "GetWarpedNoiseFromVideoAnimateDiffVariableDegradation": "GetWarpedNoiseFromVideoAnimateDiffVariableDegradation",
+    "GetWarpedNoiseFromVideoCogVideoXVariableDegradation": "GetWarpedNoiseFromVideoCogVideoXVariableDegradation",
+    "GetWarpedNoiseFromVideoHunyuanVariableDegradation": "GetWarpedNoiseFromVideoHunyuanVariableDegradation",
     }
