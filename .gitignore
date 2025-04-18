@@ -9,3 +9,11 @@ logs/
 .idea
 *.pt
 tools/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.bmp
+*.mp4
+test.py

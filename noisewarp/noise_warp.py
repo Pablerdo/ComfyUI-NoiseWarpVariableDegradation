@@ -6,6 +6,8 @@ import torch.nn.functional as F
 import numpy as np
 import torch
 from einops import rearrange
+import time
+
 
 def unique_pixels(image):
     """
@@ -605,9 +607,32 @@ def blend_noise(noise_background, noise_foreground, alpha):
 
 def mix_new_noise(noise, alpha):
     """As alpha --> 1, noise is destroyed"""
-    if isinstance(noise, torch.Tensor): return blend_noise(noise, torch.randn_like(noise)      , alpha)
-    elif isinstance(noise, np.ndarray): return blend_noise(noise, np.random.randn(*noise.shape), alpha)
-    else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
+    # if isinstance(noise, torch.Tensor): return blend_noise(noise, torch.randn_like(noise)      , alpha)
+    # elif isinstance(noise, np.ndarray): return blend_noise(noise, np.random.randn(*noise.shape), alpha)
+    # else: raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
+    
+    if isinstance(noise, torch.Tensor): 
+        # Save original random state
+        rng_state = torch.get_rng_state()
+        # Set a new random seed based on current time to ensure it's different
+        torch.manual_seed(int(torch.empty(1).random_().item() * 1e9))
+        # Generate truly random noise with the new seed
+        random_noise = torch.randn_like(noise)
+        # Restore original random state
+        torch.set_rng_state(rng_state)
+        return blend_noise(noise, random_noise, alpha)
+    elif isinstance(noise, np.ndarray): 
+        # Save numpy random state
+        rng_state = np.random.get_state()
+        # Set a new random seed
+        np.random.seed(int(time.time() * 1e6) % (2**32 - 1))
+        # Generate truly random noise
+        random_noise = np.random.randn(*noise.shape)
+        # Restore original random state
+        np.random.set_state(rng_state)
+        return blend_noise(noise, random_noise, alpha)
+    else: 
+        raise TypeError(f"Unsupported input type: {type(noise)}. Expected PyTorch Tensor or NumPy array.")
 
 def resize_noise(noise, size, alpha=None):
     """
